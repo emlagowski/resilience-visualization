@@ -60,9 +60,9 @@ export function MetricsPanel() {
         {selectedNodeId ? `Metrics: ${displayNodes[0]?.data.label}` : 'All Nodes Metrics'}
       </h3>
 
-      <ChartBlock title="Latency (ms)" data={latencyData} nodes={displayNodes} />
-      <ChartBlock title="Error Rate (%)" data={errorData} nodes={displayNodes} />
-      <ChartBlock title="Throughput (rps)" data={rpsData} nodes={displayNodes} />
+      <ChartBlock title="Latency" data={latencyData} nodes={displayNodes} yUnit="ms" />
+      <ChartBlock title="Error Rate" data={errorData} nodes={displayNodes} yUnit="%" />
+      <ChartBlock title="Throughput" data={rpsData} nodes={displayNodes} yUnit="req/s" />
     </div>
   )
 }
@@ -71,19 +71,34 @@ function ChartBlock({
   title,
   data,
   nodes,
+  yUnit,
 }: {
   title: string
   data: Record<string, number>[]
   nodes: ReturnType<typeof useFlowStore.getState>['nodes']
+  yUnit: string
 }) {
+  const formatY = (v: string | number) => `${v}${yUnit === 'req/s' ? '' : yUnit}`
+  const formatX = (v: string | number) => `${v}s`
+
   return (
     <div>
-      <div className="text-[11px] text-gray-400 mb-1">{title}</div>
+      <div className="text-[11px] text-gray-400 mb-1">
+        {title} <span className="text-gray-600">({yUnit})</span>
+      </div>
       <ResponsiveContainer width="100%" height={120}>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-          <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#64748b' }} />
-          <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={35} />
+          <XAxis
+            dataKey="time"
+            tick={{ fontSize: 10, fill: '#64748b' }}
+            tickFormatter={formatX}
+          />
+          <YAxis
+            tick={{ fontSize: 10, fill: '#64748b' }}
+            width={45}
+            tickFormatter={formatY}
+          />
           <Tooltip
             contentStyle={{
               backgroundColor: '#1e293b',
@@ -91,6 +106,8 @@ function ChartBlock({
               borderRadius: '6px',
               fontSize: '11px',
             }}
+            formatter={(value: unknown) => [`${value} ${yUnit}`, undefined]}
+            labelFormatter={(label: unknown) => `${label}s`}
           />
           {nodes.map((node, i) => (
             <Line

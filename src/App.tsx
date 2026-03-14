@@ -5,7 +5,9 @@ import { Toolbar } from './components/Canvas/Toolbar'
 import { SimulationControls } from './components/Panels/SimulationControls'
 import { ConfigPanel } from './components/Panels/ConfigPanel'
 import { MetricsPanel } from './components/Panels/MetricsPanel'
+import { StatsTable } from './components/Panels/StatsTable'
 import { useFlowStore } from './store/flow-store'
+import { useSimulationStore, type MiniChartMode } from './store/simulation-store'
 import { exportScenario, importScenario, downloadJson } from './utils/serialization'
 import { presets } from './utils/presets'
 
@@ -16,6 +18,8 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const setNodes = useFlowStore((s) => s.setNodes)
   const setEdges = useFlowStore((s) => s.setEdges)
+  const miniChartMode = useSimulationStore((s) => s.miniChartMode)
+  const setMiniChartMode = useSimulationStore((s) => s.setMiniChartMode)
 
   const handleExport = useCallback(() => {
     const json = exportScenario('My Scenario', 'Exported scenario')
@@ -63,6 +67,23 @@ export default function App() {
             Resilience Visualizer
           </h1>
           <div className="flex items-center gap-2">
+            {/* Mini-chart selector */}
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-gray-500">Charts:</span>
+              <select
+                value={miniChartMode}
+                onChange={(e) => setMiniChartMode(e.target.value as MiniChartMode)}
+                className="text-[11px] bg-gray-800 border border-gray-600 text-gray-300 rounded px-1.5 py-0.5"
+              >
+                <option value="none">None</option>
+                <option value="throughput">Throughput</option>
+                <option value="latency">Latency</option>
+                <option value="error">Error Rate</option>
+              </select>
+            </div>
+
+            <div className="w-px h-5 bg-gray-700" />
+
             <select
               onChange={(e) => handlePreset(Number(e.target.value))}
               defaultValue=""
@@ -139,6 +160,9 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* Stats table at bottom */}
+        <StatsTable />
       </div>
     </ReactFlowProvider>
   )

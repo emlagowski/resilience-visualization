@@ -12,6 +12,8 @@ function emptyMetrics() {
     circuitOpenCount: 0,
     avgLatency: 0,
     p99Latency: 0,
+    minLatency: 0,
+    maxLatency: 0,
     requestsPerSecond: 0,
     errorRate: 0,
     threadPoolUsage: 0,

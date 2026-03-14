@@ -81,9 +81,10 @@ export interface SimRequest {
   completedAt: number | null
   processingDoneAt: number | null // when local processing finishes
   deadlineAt: number | null // upstream timeout deadline
-  progress: number // 0-1 animation progress on edge
-  edgeId: string | null // current edge being traversed
+  progress: number // 0-1 animation progress on edge (visual only)
+  edgeId: string | null // current edge being animated (visual only, does not block processing)
   direction: 'downstream' | 'upstream' // request or response
+  nodeEntryTime: Record<string, number> // sim time when the request entered each node
 }
 
 // ─── Metrics ───────────────────────────────────────────────────────
@@ -98,6 +99,8 @@ export interface NodeMetrics {
   circuitOpenCount: number
   avgLatency: number
   p99Latency: number
+  minLatency: number
+  maxLatency: number
   requestsPerSecond: number
   errorRate: number
   threadPoolUsage: number // 0-1

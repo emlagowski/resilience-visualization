@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type { SimRequest, MetricsSnapshot } from '../types'
 
+export type MiniChartMode = 'none' | 'throughput' | 'latency' | 'error'
+
 interface SimulationState {
   running: boolean
   speed: number // multiplier: 0.5 - 10
@@ -8,6 +10,8 @@ interface SimulationState {
   simTime: number // ms elapsed in simulation
   requests: SimRequest[]
   metricsHistory: MetricsSnapshot[]
+  miniChartMode: MiniChartMode
+  showStatsTable: boolean
 
   start: () => void
   pause: () => void
@@ -18,6 +22,8 @@ interface SimulationState {
   setRequests: (requests: SimRequest[]) => void
   addMetricsSnapshot: (snapshot: MetricsSnapshot) => void
   clearMetrics: () => void
+  setMiniChartMode: (mode: MiniChartMode) => void
+  setShowStatsTable: (show: boolean) => void
 }
 
 const MAX_HISTORY = 300 // ~5 min at 1 snapshot/s
@@ -29,6 +35,8 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
   simTime: 0,
   requests: [],
   metricsHistory: [],
+  miniChartMode: 'none',
+  showStatsTable: false,
 
   start: () => set({ running: true }),
   pause: () => set({ running: false }),
@@ -50,4 +58,6 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
     set({ metricsHistory: [...trimmed, snapshot] })
   },
   clearMetrics: () => set({ metricsHistory: [] }),
+  setMiniChartMode: (mode) => set({ miniChartMode: mode }),
+  setShowStatsTable: (show) => set({ showStatsTable: show }),
 }))

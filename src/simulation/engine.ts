@@ -13,7 +13,7 @@ let requestIdCounter = 0
 let animFrameId: number | null = null
 let lastTime = 0
 
-// Per-node tracking
+// Per-node tracking: latencies and RPS windows now track EVERY node a request passes through
 const nodeLatencies: Record<string, number[]> = {}
 const nodeRpsWindow: Record<string, number[]> = {}
 const requestAccumulator: Record<string, number> = {}
@@ -130,15 +130,27 @@ function updateCircuitBreakerOnResult(
   return updated
 }
 
+/**
+ * Record completion metrics for EVERY node in the request's path.
+ * For each node, latency = completedAt - nodeEntryTime[nodeId].
+ */
 function recordCompletion(req: SimRequest, now: number) {
-  const latency = now - req.createdAt
-  if (!nodeLatencies[req.sourceNodeId]) nodeLatencies[req.sourceNodeId] = []
-  nodeLatencies[req.sourceNodeId]!.push(latency)
-  if (nodeLatencies[req.sourceNodeId]!.length > 1000) {
-    nodeLatencies[req.sourceNodeId] = nodeLatencies[req.sourceNodeId]!.slice(-500)
+  const realNow = Date.now()
+  for (const nodeId of req.path) {
+    const entryTime = req.nodeEntryTime[nodeId]
+    if (entryTime == null) continue
+    const latency = now - entryTime
+
+    if (!nodeLatencies[nodeId]) nodeLatencies[nodeId] = []
+    nodeLatencies[nodeId]!.push(latency)
+    // Trim to avoid unbounded growth
+    if (nodeLatencies[nodeId]!.length > 1000) {
+      nodeLatencies[nodeId] = nodeLatencies[nodeId]!.slice(-500)
+    }
+
+    if (!nodeRpsWindow[nodeId]) nodeRpsWindow[nodeId] = []
+    nodeRpsWindow[nodeId]!.push(realNow)
   }
-  if (!nodeRpsWindow[req.sourceNodeId]) nodeRpsWindow[req.sourceNodeId] = []
-  nodeRpsWindow[req.sourceNodeId]!.push(Date.now())
 }
 
 function computeMetrics(nodeId: string, requests: SimRequest[], node: FlowNode): NodeMetrics {
@@ -156,15 +168,24 @@ function computeMetrics(nodeId: string, requests: SimRequest[], node: FlowNode):
   const realNow = Date.now()
   const recentRps = rpsTimestamps.filter((t) => realNow - t < 1000).length
 
-  const total = (nodeLatencies[nodeId]?.length ?? 0) + active
+  // Clean up old RPS timestamps
+  if (rpsTimestamps.length > 500) {
+    nodeRpsWindow[nodeId] = rpsTimestamps.filter((t) => realNow - t < 2000)
+  }
+
+  const completedCount = nodeLatencies[nodeId]?.length ?? 0
+  const total = completedCount + active
   const errorCount = requests.filter(
     (r) => r.path.includes(nodeId) && (r.status === 'error' || r.status === 'timeout'),
   ).length
 
+  const minLat = sorted.length > 0 ? sorted[0]! : 0
+  const maxLat = sorted.length > 0 ? sorted[sorted.length - 1]! : 0
+
   return {
     totalRequests: total,
     activeRequests: active,
-    completedRequests: nodeLatencies[nodeId]?.length ?? 0,
+    completedRequests: completedCount,
     errorCount,
     timeoutCount: requests.filter((r) => r.path.includes(nodeId) && r.status === 'timeout').length,
     rejectedCount: requests.filter(
@@ -173,6 +194,8 @@ function computeMetrics(nodeId: string, requests: SimRequest[], node: FlowNode):
     circuitOpenCount: node.data.circuitBreaker.state === 'open' ? 1 : 0,
     avgLatency: Math.round(avg),
     p99Latency: Math.round(p99),
+    minLatency: Math.round(minLat),
+    maxLatency: Math.round(maxLat),
     requestsPerSecond: recentRps,
     errorRate: total > 0 ? errorCount / total : 0,
     threadPoolUsage: node.data.threadPool.max > 0 ? active / node.data.threadPool.max : 0,
@@ -259,11 +282,12 @@ function tick(deltaMs: number) {
         progress: 0,
         edgeId: null,
         direction: 'downstream',
+        nodeEntryTime: { [node.id]: now },
       })
     }
   }
 
-  // 2. Process each request
+  // 2. Process each request (edge animation does NOT block processing)
   const completedIds = new Set<string>()
 
   for (const req of requests) {
@@ -288,17 +312,8 @@ function tick(deltaMs: number) {
       continue
     }
 
-    // ── Traversing an edge (animated) ──
-    if (req.edgeId) {
-      req.progress += 0.003 * speed * deltaMs
-      if (req.progress >= 1) {
-        req.progress = 0
-        req.edgeId = null
-        // Arrived at target node, status is 'pending' — will be picked up below
-      } else {
-        continue
-      }
-    }
+    // NOTE: No edge traversal blocking here. edgeId is purely visual and
+    // is updated in a separate pass at the end of the tick.
 
     // ── PENDING — try to enter the node's thread pool ──
     if (req.status === 'pending') {
@@ -309,6 +324,7 @@ function tick(deltaMs: number) {
       if (activeInNode >= currentNode.data.threadPool.max) {
         req.status = 'rejected'
         req.completedAt = now
+        recordCompletion(req, now)
         finalizeRequest(req, false)
         continue
       }
@@ -317,6 +333,7 @@ function tick(deltaMs: number) {
       if (req.deadlineAt && now >= req.deadlineAt) {
         req.status = 'timeout'
         req.completedAt = now
+        recordCompletion(req, now)
         finalizeRequest(req, false)
         continue
       }
@@ -331,6 +348,7 @@ function tick(deltaMs: number) {
       if (Math.random() < currentNode.data.errorRate) {
         req.status = 'error'
         req.completedAt = now
+        recordCompletion(req, now)
         finalizeRequest(req, false)
         continue
       }
@@ -342,6 +360,7 @@ function tick(deltaMs: number) {
       if (req.deadlineAt && now >= req.deadlineAt) {
         req.status = 'timeout'
         req.completedAt = now
+        recordCompletion(req, now)
         finalizeRequest(req, false)
         continue
       }
@@ -359,6 +378,7 @@ function tick(deltaMs: number) {
         if (!cbAllowed) {
           req.status = 'circuit_open'
           req.completedAt = now
+          recordCompletion(req, now)
           finalizeRequest(req, false)
           continue
         }
@@ -385,6 +405,7 @@ function tick(deltaMs: number) {
         if (cp.active >= cp.max) {
           req.status = 'rejected'
           req.completedAt = now
+          recordCompletion(req, now)
           finalizeRequest(req, false)
           continue
         }
@@ -402,6 +423,7 @@ function tick(deltaMs: number) {
           // All downstream targets unhealthy
           req.status = 'error'
           req.completedAt = now
+          recordCompletion(req, now)
           finalizeRequest(req, false)
           continue
         }
@@ -415,19 +437,36 @@ function tick(deltaMs: number) {
           },
         }
 
+        // Set edgeId for visual animation only — does NOT block processing
         req.edgeId = edge.id
         req.progress = 0
         req.currentNodeId = edge.target
         req.path.push(edge.target)
+        req.nodeEntryTime[edge.target] = now
         req.status = 'pending'
         req.processingDoneAt = null
         req.deadlineAt = now + currentNode.data.timeout
+
+        // The request is immediately 'pending' at the target node and will be
+        // picked up for processing in this same tick (or the next if thread pool
+        // is full). The edgeId/progress are updated visually below.
       } else {
         // Leaf node or no downstream — request completed successfully
         req.status = 'completed'
         req.completedAt = now
         recordCompletion(req, now)
         finalizeRequest(req, true)
+      }
+    }
+  }
+
+  // 3. Update edge animation progress (purely visual, never blocks simulation)
+  for (const req of requests) {
+    if (req.edgeId) {
+      req.progress += 0.003 * speed * deltaMs
+      if (req.progress >= 1) {
+        req.progress = 0
+        req.edgeId = null
       }
     }
   }
