@@ -84,6 +84,23 @@ function checkCircuitBreaker(cb: CircuitBreakerConfig, now: number): boolean {
   return true // closed or half-open allow traffic
 }
 
+function shouldTripCircuitBreaker(cb: CircuitBreakerConfig): boolean {
+  const mode = cb.thresholdMode ?? 'count'
+  const totalInWindow = (cb.requestTimestamps ?? []).length
+  const failuresInWindow = cb.failureTimestamps.length
+  const minSample = cb.minSampleSize ?? 10
+  const rateThreshold = (cb.failureRateThreshold ?? 50) / 100
+
+  const countTrips = failuresInWindow >= cb.failureThreshold
+  const percentageTrips =
+    totalInWindow >= minSample && totalInWindow > 0 && failuresInWindow / totalInWindow >= rateThreshold
+
+  if (mode === 'count') return countTrips
+  if (mode === 'percentage') return percentageTrips
+  // 'both' — either condition is enough
+  return countTrips || percentageTrips
+}
+
 function updateCircuitBreakerOnResult(
   cb: CircuitBreakerConfig,
   success: boolean,
@@ -92,21 +109,29 @@ function updateCircuitBreakerOnResult(
   if (!cb.enabled) return cb
   const updated = { ...cb }
 
+  // Purge old timestamps outside the sliding window
   updated.failureTimestamps = updated.failureTimestamps.filter(
+    (t) => now - t < updated.windowSize,
+  )
+  updated.requestTimestamps = (updated.requestTimestamps ?? []).filter(
     (t) => now - t < updated.windowSize,
   )
 
   if (updated.state === 'closed') {
+    // Track every result in the window
+    updated.requestTimestamps = [...updated.requestTimestamps, now]
     if (!success) {
       updated.failureTimestamps = [...updated.failureTimestamps, now]
-      updated.failureCount = updated.failureTimestamps.length
-      if (updated.failureCount >= updated.failureThreshold) {
-        updated.state = 'open'
-        updated.lastStateChange = now
-        updated.failureCount = 0
-        updated.successCount = 0
-        updated.failureTimestamps = []
-      }
+    }
+    updated.failureCount = updated.failureTimestamps.length
+
+    if (shouldTripCircuitBreaker(updated)) {
+      updated.state = 'open'
+      updated.lastStateChange = now
+      updated.failureCount = 0
+      updated.successCount = 0
+      updated.failureTimestamps = []
+      updated.requestTimestamps = []
     }
   } else if (updated.state === 'half-open') {
     if (success) {
@@ -117,6 +142,7 @@ function updateCircuitBreakerOnResult(
         updated.failureCount = 0
         updated.successCount = 0
         updated.failureTimestamps = []
+        updated.requestTimestamps = []
       }
     } else {
       updated.state = 'open'
@@ -124,6 +150,7 @@ function updateCircuitBreakerOnResult(
       updated.failureCount = 0
       updated.successCount = 0
       updated.failureTimestamps = []
+      updated.requestTimestamps = []
     }
   }
 

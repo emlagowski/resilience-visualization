@@ -46,15 +46,15 @@ export function SimulationControls() {
         Reset
       </button>
 
-      <div className="w-32">
+      <div className="w-36">
         <ParamSlider
           label="Speed"
           value={speed}
-          min={0.5}
+          min={0.1}
           max={10}
-          step={0.5}
+          step={0.1}
           unit="x"
-          onChange={setSpeed}
+          onChange={(v) => setSpeed(Math.round(v * 10) / 10)}
         />
       </div>
 

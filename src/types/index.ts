@@ -12,10 +12,15 @@ export interface ConnectionPoolConfig {
   active: number
 }
 
+export type CbThresholdMode = 'count' | 'percentage' | 'both'
+
 export interface CircuitBreakerConfig {
   enabled: boolean
   state: 'closed' | 'open' | 'half-open'
-  failureThreshold: number
+  thresholdMode: CbThresholdMode  // how to evaluate trip: count, %, or either
+  failureThreshold: number         // count mode: absolute failures in window
+  failureRateThreshold: number     // percentage mode: 0-100 (e.g. 50 = 50%)
+  minSampleSize: number            // min requests in window before % mode can trip
   successThreshold: number
   openDuration: number // ms
   windowSize: number // ms
@@ -23,6 +28,7 @@ export interface CircuitBreakerConfig {
   successCount: number
   lastStateChange: number
   failureTimestamps: number[]
+  requestTimestamps: number[]      // all request timestamps in window (for % calc)
 }
 
 export interface HealthCheckConfig {

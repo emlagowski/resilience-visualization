@@ -1,6 +1,6 @@
 import { useFlowStore } from '../../store/flow-store'
 import { ParamSlider } from '../Shared/ParamSlider'
-import type { ServiceNodeData, LoadBalancerStrategy } from '../../types'
+import type { ServiceNodeData, LoadBalancerStrategy, CbThresholdMode } from '../../types'
 
 export function ConfigPanel() {
   const nodes = useFlowStore((s) => s.nodes)
@@ -153,41 +153,105 @@ export function ConfigPanel() {
         </label>
         {data.circuitBreaker.enabled && (
           <>
-            <div className="text-xs mt-1">
-              State:{' '}
+            <div className="flex items-center justify-between text-xs mt-1">
+              <span className="text-gray-400">State:</span>
               <span
                 className={
                   data.circuitBreaker.state === 'open'
-                    ? 'text-red-400'
+                    ? 'text-red-400 font-mono'
                     : data.circuitBreaker.state === 'half-open'
-                      ? 'text-yellow-400'
-                      : 'text-emerald-400'
+                      ? 'text-yellow-400 font-mono'
+                      : 'text-emerald-400 font-mono'
                 }
               >
                 {data.circuitBreaker.state.toUpperCase()}
               </span>
             </div>
+
+            {/* Threshold mode selector */}
+            <div className="flex flex-col gap-0.5 mt-1">
+              <span className="text-xs text-gray-400">Trigger mode</span>
+              <div className="flex gap-1">
+                {(['count', 'percentage', 'both'] as CbThresholdMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() =>
+                      update({ circuitBreaker: { ...data.circuitBreaker, thresholdMode: mode } })
+                    }
+                    className={`flex-1 text-[10px] py-0.5 rounded border transition-colors ${
+                      data.circuitBreaker.thresholdMode === mode
+                        ? 'bg-blue-600 border-blue-500 text-white'
+                        : 'bg-gray-800 border-gray-600 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    {mode === 'count' ? 'Count' : mode === 'percentage' ? 'Rate %' : 'Both'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Count threshold */}
+            {(data.circuitBreaker.thresholdMode === 'count' ||
+              data.circuitBreaker.thresholdMode === 'both') && (
+              <ParamSlider
+                label="Failure threshold"
+                value={data.circuitBreaker.failureThreshold}
+                min={1}
+                max={100}
+                onChange={(v) =>
+                  update({ circuitBreaker: { ...data.circuitBreaker, failureThreshold: v } })
+                }
+                unit=" errs"
+              />
+            )}
+
+            {/* Rate threshold */}
+            {(data.circuitBreaker.thresholdMode === 'percentage' ||
+              data.circuitBreaker.thresholdMode === 'both') && (
+              <>
+                <ParamSlider
+                  label="Failure rate"
+                  value={data.circuitBreaker.failureRateThreshold}
+                  min={1}
+                  max={100}
+                  onChange={(v) =>
+                    update({
+                      circuitBreaker: { ...data.circuitBreaker, failureRateThreshold: v },
+                    })
+                  }
+                  unit="%"
+                />
+                <ParamSlider
+                  label="Min sample size"
+                  value={data.circuitBreaker.minSampleSize}
+                  min={1}
+                  max={200}
+                  onChange={(v) =>
+                    update({
+                      circuitBreaker: { ...data.circuitBreaker, minSampleSize: v },
+                    })
+                  }
+                  unit=" req"
+                />
+              </>
+            )}
+
+            {/* Show min sample for 'both' mode too (already rendered above in rate block) */}
+            {data.circuitBreaker.thresholdMode === 'count' && (
+              <div className="text-[10px] text-gray-600 italic">
+                Trips after {data.circuitBreaker.failureThreshold} failures in the window
+              </div>
+            )}
+
             <ParamSlider
-              label="Failure threshold"
-              value={data.circuitBreaker.failureThreshold}
-              min={1}
-              max={50}
-              onChange={(v) =>
-                update({
-                  circuitBreaker: { ...data.circuitBreaker, failureThreshold: v },
-                })
-              }
-            />
-            <ParamSlider
-              label="Success threshold (half-open)"
+              label="Success to close"
               value={data.circuitBreaker.successThreshold}
               min={1}
               max={20}
               onChange={(v) =>
-                update({
-                  circuitBreaker: { ...data.circuitBreaker, successThreshold: v },
-                })
+                update({ circuitBreaker: { ...data.circuitBreaker, successThreshold: v } })
               }
+              unit=" ok"
             />
             <ParamSlider
               label="Open duration"
@@ -197,9 +261,7 @@ export function ConfigPanel() {
               step={1000}
               unit="ms"
               onChange={(v) =>
-                update({
-                  circuitBreaker: { ...data.circuitBreaker, openDuration: v },
-                })
+                update({ circuitBreaker: { ...data.circuitBreaker, openDuration: v } })
               }
             />
             <ParamSlider
@@ -210,11 +272,32 @@ export function ConfigPanel() {
               step={5000}
               unit="ms"
               onChange={(v) =>
-                update({
-                  circuitBreaker: { ...data.circuitBreaker, windowSize: v },
-                })
+                update({ circuitBreaker: { ...data.circuitBreaker, windowSize: v } })
               }
             />
+
+            {/* Window stats */}
+            {data.circuitBreaker.thresholdMode !== 'count' && (
+              <div className="text-[10px] text-gray-600 flex gap-3">
+                <span>
+                  Window: {(data.circuitBreaker.requestTimestamps ?? []).length} req
+                </span>
+                <span>
+                  Failures: {data.circuitBreaker.failureTimestamps.length}
+                </span>
+                <span>
+                  Rate:{' '}
+                  {(data.circuitBreaker.requestTimestamps ?? []).length > 0
+                    ? (
+                        (data.circuitBreaker.failureTimestamps.length /
+                          (data.circuitBreaker.requestTimestamps ?? []).length) *
+                        100
+                      ).toFixed(1)
+                    : '0.0'}
+                  %
+                </span>
+              </div>
+            )}
           </>
         )}
       </Section>
@@ -255,7 +338,9 @@ export function ConfigPanel() {
       <Section title="Chaos Controls">
         <div className="flex flex-wrap gap-1.5">
           <button
-            onClick={() => update({ healthCheck: { ...data.healthCheck, healthy: false, enabled: true } })}
+            onClick={() =>
+              update({ healthCheck: { ...data.healthCheck, healthy: false, enabled: true } })
+            }
             className="px-2 py-1 text-[11px] bg-red-900 hover:bg-red-800 text-red-200 rounded border border-red-700"
           >
             Kill Node
@@ -263,7 +348,10 @@ export function ConfigPanel() {
           <button
             onClick={() =>
               update({
-                processingTime: { min: data.processingTime.min * 5, max: data.processingTime.max * 5 },
+                processingTime: {
+                  min: data.processingTime.min * 5,
+                  max: data.processingTime.max * 5,
+                },
               })
             }
             className="px-2 py-1 text-[11px] bg-yellow-900 hover:bg-yellow-800 text-yellow-200 rounded border border-yellow-700"
@@ -276,11 +364,10 @@ export function ConfigPanel() {
           >
             Error Spike +50%
           </button>
+          {/* Recover only restores health — does NOT reset user-configured params */}
           <button
             onClick={() =>
               update({
-                errorRate: 0,
-                processingTime: { min: 50, max: 200 },
                 healthCheck: { ...data.healthCheck, healthy: true },
               })
             }
