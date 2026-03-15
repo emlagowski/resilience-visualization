@@ -61,6 +61,7 @@ export default function App() {
       if (!preset) return
       setNodes(preset.nodes)
       setEdges(preset.edges)
+      window.umami?.track('preset_selected', { name: preset.name })
     },
     [setNodes, setEdges],
   )
