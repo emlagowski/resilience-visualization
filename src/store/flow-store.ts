@@ -74,6 +74,8 @@ export function createDefaultConfig(overrides: Partial<ServiceNodeData> = {}): S
     instances: 1,
     requestsPerSecond: 10,
     isSource: false,
+    processingTimeMultiplier: 1,
+    miniChartMode: 'none',
     metrics: createEmptyMetrics(),
     ...rest,
     // rest may also override circuitBreaker with a partial but that's covered above

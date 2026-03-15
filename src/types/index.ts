@@ -55,7 +55,13 @@ export interface ServiceNodeConfig {
   instances: number
   requestsPerSecond: number // only for source nodes
   isSource: boolean
+  processingTimeMultiplier: number // chaos: 1 = normal, 5 = 5× slower, etc.
+  miniChartMode: MiniChartMode     // per-node chart override
 }
+
+// ─── Chart / UI ────────────────────────────────────────────────────
+
+export type MiniChartMode = 'none' | 'throughput' | 'latency' | 'error'
 
 // ─── React Flow Node/Edge types ────────────────────────────────────
 

@@ -442,8 +442,9 @@ function tick(deltaMs: number) {
       // Enter processing
       req.status = 'processing'
       req.startedProcessingAt = now
+      const latencyMul = currentNode.data.processingTimeMultiplier ?? 1
       req.processingDoneAt =
-        now + randomBetween(currentNode.data.processingTime.min, currentNode.data.processingTime.max)
+        now + randomBetween(currentNode.data.processingTime.min, currentNode.data.processingTime.max) * latencyMul
 
       // Random error at this node
       if (Math.random() < currentNode.data.errorRate) {
