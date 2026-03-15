@@ -7,7 +7,7 @@ import {
   type OnEdgesChange,
   type OnConnect,
 } from '@xyflow/react'
-import type { FlowNode, FlowEdge, ServiceNodeData } from '../types'
+import type { FlowNode, FlowEdge, FlowEdgeData, ServiceNodeData } from '../types'
 
 interface FlowState {
   nodes: FlowNode[]
@@ -22,6 +22,7 @@ interface FlowState {
   addNode: (config: Partial<ServiceNodeData>, position?: { x: number; y: number }) => string
   removeNode: (id: string) => void
   removeEdge: (id: string) => void
+  setEdgeFailed: (id: string, failed: boolean) => void
   updateNodeConfig: (id: string, config: Partial<ServiceNodeData>) => void
   updateNodePosition: (id: string, position: { x: number; y: number }) => void
   duplicateNode: (id: string, position?: { x: number; y: number }) => string
@@ -141,6 +142,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
 
   removeEdge: (id) => {
     set({ edges: get().edges.filter((e) => e.id !== id) })
+  },
+
+  setEdgeFailed: (id, failed) => {
+    set({
+      edges: get().edges.map((e) =>
+        e.id === id ? { ...e, data: { ...(e.data as FlowEdgeData), failed } } : e,
+      ),
+    })
   },
 
   updateNodeConfig: (id, config) => {
