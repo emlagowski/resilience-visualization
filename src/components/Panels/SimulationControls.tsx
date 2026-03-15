@@ -21,6 +21,7 @@ export function SimulationControls({ onToggleToolbar, toolbarOpen }: Props) {
     } else {
       useSimulationStore.getState().start()
       startSimulationLoop()
+      window.umami?.track('scenario_run')
     }
   }
 
