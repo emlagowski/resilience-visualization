@@ -36,7 +36,7 @@ function randomBetween(min: number, max: number): number {
 }
 
 function getDownstreamEdges(nodeId: string, edges: FlowEdge[]): FlowEdge[] {
-  return edges.filter((e) => e.source === nodeId)
+  return edges.filter((e) => e.source === nodeId && !e.data?.failed)
 }
 
 function pickDownstreamEdge(

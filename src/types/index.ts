@@ -65,7 +65,12 @@ export type ServiceNodeData = ServiceNodeConfig & {
 }
 
 export type FlowNode = Node<ServiceNodeData, 'service'>
-export type FlowEdge = Edge
+
+export interface FlowEdgeData extends Record<string, unknown> {
+  failed?: boolean
+}
+
+export type FlowEdge = Edge<FlowEdgeData>
 
 // ─── Simulation ────────────────────────────────────────────────────
 
