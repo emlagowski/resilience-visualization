@@ -12,20 +12,17 @@ import { exportScenario, importScenario, downloadJson } from './utils/serializat
 import { presets } from './utils/presets'
 
 type RightTab = 'config' | 'metrics'
-type MobileView = 'canvas' | 'panel'
 
 export default function App() {
   const [rightTab, setRightTab] = useState<RightTab>('config')
   const [selectedPreset, setSelectedPreset] = useState(0)
   const [toolbarOpen, setToolbarOpen] = useState(false)
-  const [mobileView, setMobileView] = useState<MobileView>('canvas')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const setNodes = useFlowStore((s) => s.setNodes)
   const setEdges = useFlowStore((s) => s.setEdges)
   const miniChartMode = useSimulationStore((s) => s.miniChartMode)
   const setMiniChartMode = useSimulationStore((s) => s.setMiniChartMode)
 
-  // Load the first preset on initial mount
   useEffect(() => {
     const first = presets[0]
     if (first) { setNodes(first.nodes); setEdges(first.edges) }
@@ -68,21 +65,20 @@ export default function App() {
     [setNodes, setEdges],
   )
 
-  const openPanel = (tab: RightTab) => {
-    setRightTab(tab)
-    setMobileView('panel')
-  }
-
   return (
     <ReactFlowProvider>
-      <div className="h-screen flex flex-col bg-gray-950 text-gray-100">
+      {/*
+        Mobile : natural document scroll — no height / overflow constraints
+        Desktop: h-screen overflow-hidden, side-by-side layout
+      */}
+      <div className="flex flex-col bg-gray-950 text-gray-100 md:h-screen md:overflow-hidden">
+
         {/* Top bar */}
-        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-900 border-b border-gray-700">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-900 border-b border-gray-700 shrink-0">
           <h1 className="text-base font-bold text-white tracking-tight shrink-0">
             Resilience Visualizer
           </h1>
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {/* Mini-chart selector */}
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-gray-500 hidden sm:inline">Charts:</span>
               <select
@@ -105,9 +101,7 @@ export default function App() {
               className="text-xs bg-gray-800 border border-gray-600 text-gray-200 rounded px-1.5 py-1 max-w-[130px]"
             >
               {presets.map((p, i) => (
-                <option key={p.name} value={i}>
-                  {p.name}
-                </option>
+                <option key={p.name} value={i}>{p.name}</option>
               ))}
             </select>
             <button
@@ -122,62 +116,43 @@ export default function App() {
             >
               Import
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleFileChange}
-              className="hidden"
-            />
+            <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileChange} className="hidden" />
           </div>
         </div>
 
-        {/* Simulation controls — toolbar toggle button visible on mobile */}
+        {/* Simulation controls */}
         <SimulationControls
           onToggleToolbar={() => setToolbarOpen((o) => !o)}
           toolbarOpen={toolbarOpen}
         />
 
-        {/* Toolbar — always visible on desktop, toggled on mobile */}
-        <div className={`${toolbarOpen ? 'block' : 'hidden'} md:block`}>
+        {/* Toolbar — always on desktop, toggled on mobile */}
+        <div className={`${toolbarOpen ? 'block' : 'hidden'} md:block shrink-0`}>
           <Toolbar />
         </div>
 
-        {/* Main content */}
-        <div className="flex flex-1 overflow-hidden flex-col md:flex-row min-h-0">
-          {/* Canvas — hidden on mobile when viewing the panel */}
-          <div className={`flex-1 min-h-0 ${mobileView === 'panel' ? 'hidden md:flex' : 'flex'} flex-col`}>
+        {/*
+          Main content
+          Mobile : flex-col, canvas has fixed h-[55vh], config flows below naturally
+          Desktop: flex-row flex-1, side-by-side, overflow-hidden
+        */}
+        <div className="flex flex-col md:flex-row md:flex-1 md:overflow-hidden md:min-h-0">
+
+          {/* Canvas */}
+          <div className="h-[55vh] md:h-auto md:flex-1 md:min-h-0">
             <FlowCanvas />
           </div>
 
-          {/* Config/Metrics panel
-              Mobile canvas view : only the tab-header strip is visible (no content)
-              Mobile panel view  : flex-1, takes all remaining height
-              Desktop            : fixed w-80, full height sidebar
+          {/* Config / Metrics panel
+              Mobile : natural block height (no overflow), tab header is sticky
+              Desktop: fixed-width sidebar with internal scroll
           */}
-          <div
-            className={[
-              'bg-gray-900 flex flex-col border-gray-700 shrink-0',
-              'md:w-80 md:border-l md:flex',
-              mobileView === 'canvas'
-                ? 'w-full border-t'
-                : 'flex-1 min-h-0 w-full border-t',
-            ].join(' ')}
-          >
-            {/* Tab header */}
-            <div className="flex border-b border-gray-700 items-center shrink-0">
-              {/* Back button — mobile panel view only */}
-              {mobileView === 'panel' && (
-                <button
-                  onClick={() => setMobileView('canvas')}
-                  className="md:hidden px-3 py-2 text-gray-400 text-sm shrink-0"
-                  aria-label="Back to canvas"
-                >
-                  ←
-                </button>
-              )}
+          <div className="border-t border-gray-700 bg-gray-900 md:border-t-0 md:border-l md:w-80 md:flex md:flex-col md:overflow-hidden md:shrink-0">
+
+            {/* Tab header — sticky on mobile so it's always reachable while scrolling */}
+            <div className="flex border-b border-gray-700 bg-gray-900 sticky top-0 z-10 md:static md:shrink-0">
               <button
-                onClick={() => openPanel('config')}
+                onClick={() => setRightTab('config')}
                 className={`flex-1 py-2 text-sm font-medium transition-colors ${
                   rightTab === 'config'
                     ? 'text-blue-400 border-b-2 border-blue-400'
@@ -187,7 +162,7 @@ export default function App() {
                 Config
               </button>
               <button
-                onClick={() => openPanel('metrics')}
+                onClick={() => setRightTab('metrics')}
                 className={`flex-1 py-2 text-sm font-medium transition-colors ${
                   rightTab === 'metrics'
                     ? 'text-blue-400 border-b-2 border-blue-400'
@@ -198,18 +173,17 @@ export default function App() {
               </button>
             </div>
 
-            {/* Panel content — hidden on mobile canvas view */}
-            <div
-              className={`flex-1 overflow-y-auto min-h-0 ${
-                mobileView === 'canvas' ? 'hidden md:block' : ''
-              }`}
-            >
+            {/* Panel content
+                Mobile : no overflow constraint — expands to full content height
+                Desktop: flex-1 + overflow-y-auto for sidebar scroll
+            */}
+            <div className="md:flex-1 md:overflow-y-auto md:min-h-0">
               {rightTab === 'config' ? <ConfigPanel /> : <MetricsPanel />}
             </div>
           </div>
         </div>
 
-        {/* Stats table at bottom */}
+        {/* Stats table */}
         <StatsTable />
 
         {/* Footer */}
