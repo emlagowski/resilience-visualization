@@ -32,7 +32,7 @@ function RequestDot({
 }
 
 export const ConnectionEdge = memo(function ConnectionEdge(props: EdgeProps) {
-  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition } = props
+  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected } = props
   const requests = useSimulationStore((s) => s.requests)
 
   const [edgePath] = getBezierPath({
@@ -51,7 +51,21 @@ export const ConnectionEdge = memo(function ConnectionEdge(props: EdgeProps) {
       <defs>
         <path id={`path-${id}`} d={edgePath} />
       </defs>
-      <BaseEdge id={id} path={edgePath} style={{ stroke: '#475569', strokeWidth: 2 }} />
+      {selected && (
+        <BaseEdge
+          id={`${id}-selection`}
+          path={edgePath}
+          style={{ stroke: '#60a5fa', strokeWidth: 6, opacity: 0.4, strokeLinecap: 'round' }}
+        />
+      )}
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{
+          stroke: selected ? '#60a5fa' : '#475569',
+          strokeWidth: selected ? 2.5 : 2,
+        }}
+      />
       {edgeRequests.map((req) => (
         <RequestDot
           key={req.id}

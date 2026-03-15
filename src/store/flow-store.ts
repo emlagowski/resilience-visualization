@@ -21,6 +21,7 @@ interface FlowState {
 
   addNode: (config: Partial<ServiceNodeData>, position?: { x: number; y: number }) => string
   removeNode: (id: string) => void
+  removeEdge: (id: string) => void
   updateNodeConfig: (id: string, config: Partial<ServiceNodeData>) => void
   updateNodePosition: (id: string, position: { x: number; y: number }) => void
   duplicateNode: (id: string, position?: { x: number; y: number }) => string
@@ -136,6 +137,10 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       edges: get().edges.filter((e) => e.source !== id && e.target !== id),
       selectedNodeId: get().selectedNodeId === id ? null : get().selectedNodeId,
     })
+  },
+
+  removeEdge: (id) => {
+    set({ edges: get().edges.filter((e) => e.id !== id) })
   },
 
   updateNodeConfig: (id, config) => {
