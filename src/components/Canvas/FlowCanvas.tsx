@@ -81,7 +81,7 @@ export function FlowCanvas() {
   )
 
   return (
-    <div className="flex-1 h-full relative">
+    <div className="flex-1 h-full relative" style={{ touchAction: 'none' }}>
       <ReactFlow
         nodes={nodes as any}
         edges={edges}
@@ -98,6 +98,11 @@ export function FlowCanvas() {
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{ type: 'default' }}
         className="bg-gray-950"
+        zoomOnPinch={true}
+        panOnDrag={true}
+        preventScrolling={true}
+        minZoom={0.05}
+        maxZoom={4}
       >
         <Controls className="!bg-gray-800 !border-gray-600 !shadow-lg [&>button]:!bg-gray-800 [&>button]:!border-gray-600 [&>button]:!text-gray-300 [&>button:hover]:!bg-gray-700" />
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#1e293b" />
@@ -112,8 +117,8 @@ export function FlowCanvas() {
         />
       )}
 
-      {/* Alt+drag hint */}
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-gray-700 pointer-events-none select-none">
+      {/* Hint */}
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-gray-700 pointer-events-none select-none hidden md:block">
         Right-click node for menu · Alt+drag to duplicate
       </div>
     </div>

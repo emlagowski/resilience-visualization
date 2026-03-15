@@ -16,13 +16,13 @@ type RightTab = 'config' | 'metrics'
 export default function App() {
   const [rightTab, setRightTab] = useState<RightTab>('config')
   const [selectedPreset, setSelectedPreset] = useState(0)
+  const [toolbarOpen, setToolbarOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const setNodes = useFlowStore((s) => s.setNodes)
   const setEdges = useFlowStore((s) => s.setEdges)
   const miniChartMode = useSimulationStore((s) => s.miniChartMode)
   const setMiniChartMode = useSimulationStore((s) => s.setMiniChartMode)
 
-  // Load the first preset on initial mount
   useEffect(() => {
     const first = presets[0]
     if (first) { setNodes(first.nodes); setEdges(first.edges) }
@@ -67,16 +67,20 @@ export default function App() {
 
   return (
     <ReactFlowProvider>
-      <div className="h-screen flex flex-col bg-gray-950 text-gray-100">
+      {/*
+        Mobile : natural document scroll — no height / overflow constraints
+        Desktop: h-screen overflow-hidden, side-by-side layout
+      */}
+      <div className="flex flex-col bg-gray-950 text-gray-100 md:h-screen md:overflow-hidden">
+
         {/* Top bar */}
-        <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-700">
-          <h1 className="text-lg font-bold text-white tracking-tight">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-900 border-b border-gray-700 shrink-0">
+          <h1 className="text-base font-bold text-white tracking-tight shrink-0">
             Resilience Visualizer
           </h1>
-          <div className="flex items-center gap-2">
-            {/* Mini-chart selector */}
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
             <div className="flex items-center gap-1">
-              <span className="text-[11px] text-gray-500">Charts:</span>
+              <span className="text-[11px] text-gray-500 hidden sm:inline">Charts:</span>
               <select
                 value={miniChartMode}
                 onChange={(e) => setMiniChartMode(e.target.value as MiniChartMode)}
@@ -89,55 +93,64 @@ export default function App() {
               </select>
             </div>
 
-            <div className="w-px h-5 bg-gray-700" />
+            <div className="w-px h-5 bg-gray-700 hidden sm:block" />
 
             <select
               value={selectedPreset}
               onChange={(e) => { const i = Number(e.target.value); setSelectedPreset(i); handlePreset(i) }}
-              className="text-sm bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1"
+              className="text-xs bg-gray-800 border border-gray-600 text-gray-200 rounded px-1.5 py-1 max-w-[130px]"
             >
               {presets.map((p, i) => (
-                <option key={p.name} value={i}>
-                  {p.name}
-                </option>
+                <option key={p.name} value={i}>{p.name}</option>
               ))}
             </select>
             <button
               onClick={handleExport}
-              className="px-3 py-1 text-sm bg-gray-800 hover:bg-gray-700 text-gray-200 rounded border border-gray-600"
+              className="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded border border-gray-600"
             >
-              Export JSON
+              Export
             </button>
             <button
               onClick={handleImport}
-              className="px-3 py-1 text-sm bg-gray-800 hover:bg-gray-700 text-gray-200 rounded border border-gray-600"
+              className="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 rounded border border-gray-600"
             >
-              Import JSON
+              Import
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleFileChange}
-              className="hidden"
-            />
+            <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileChange} className="hidden" />
           </div>
         </div>
 
         {/* Simulation controls */}
-        <SimulationControls />
+        <SimulationControls
+          onToggleToolbar={() => setToolbarOpen((o) => !o)}
+          toolbarOpen={toolbarOpen}
+        />
 
-        {/* Toolbar */}
-        <Toolbar />
+        {/* Toolbar — always on desktop, toggled on mobile */}
+        <div className={`${toolbarOpen ? 'block' : 'hidden'} md:block shrink-0`}>
+          <Toolbar />
+        </div>
 
-        {/* Main content */}
-        <div className="flex flex-1 overflow-hidden">
+        {/*
+          Main content
+          Mobile : flex-col, canvas has fixed h-[55vh], config flows below naturally
+          Desktop: flex-row flex-1, side-by-side, overflow-hidden
+        */}
+        <div className="flex flex-col md:flex-row md:flex-1 md:overflow-hidden md:min-h-0">
+
           {/* Canvas */}
-          <FlowCanvas />
+          <div className="h-[55vh] md:h-auto md:flex-1 md:min-h-0">
+            <FlowCanvas />
+          </div>
 
-          {/* Right sidebar */}
-          <div className="w-80 border-l border-gray-700 bg-gray-900 flex flex-col shrink-0">
-            <div className="flex border-b border-gray-700">
+          {/* Config / Metrics panel
+              Mobile : natural block height (no overflow), tab header is sticky
+              Desktop: fixed-width sidebar with internal scroll
+          */}
+          <div className="border-t border-gray-700 bg-gray-900 md:border-t-0 md:border-l md:w-80 md:flex md:flex-col md:overflow-hidden md:shrink-0">
+
+            {/* Tab header — sticky on mobile so it's always reachable while scrolling */}
+            <div className="flex border-b border-gray-700 bg-gray-900 sticky top-0 z-10 md:static md:shrink-0">
               <button
                 onClick={() => setRightTab('config')}
                 className={`flex-1 py-2 text-sm font-medium transition-colors ${
@@ -159,13 +172,18 @@ export default function App() {
                 Metrics
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto">
+
+            {/* Panel content
+                Mobile : no overflow constraint — expands to full content height
+                Desktop: flex-1 + overflow-y-auto for sidebar scroll
+            */}
+            <div className="md:flex-1 md:overflow-y-auto md:min-h-0">
               {rightTab === 'config' ? <ConfigPanel /> : <MetricsPanel />}
             </div>
           </div>
         </div>
 
-        {/* Stats table at bottom */}
+        {/* Stats table */}
         <StatsTable />
 
         {/* Footer */}
