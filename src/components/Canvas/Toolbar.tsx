@@ -24,7 +24,7 @@ export function Toolbar() {
   const addNode = useFlowStore((s) => s.addNode)
 
   return (
-    <div className="flex gap-2 p-3 bg-gray-900 border-b border-gray-700">
+    <div className="flex gap-2 px-3 py-2 bg-gray-900 border-b border-gray-700 overflow-x-auto">
       <span className="text-gray-400 text-sm self-center mr-2">Add:</span>
       {nodePresets.map((preset) => (
         <button

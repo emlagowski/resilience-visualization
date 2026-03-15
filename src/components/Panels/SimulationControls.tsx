@@ -28,7 +28,7 @@ export function SimulationControls() {
   ).length
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-gray-900 border-b border-gray-700">
+    <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-900 border-b border-gray-700">
       <button
         onClick={handleToggle}
         className={`px-4 py-1.5 text-sm rounded font-medium transition-colors ${
@@ -46,7 +46,7 @@ export function SimulationControls() {
         Reset
       </button>
 
-      <div className="w-36">
+      <div className="w-32">
         <ParamSlider
           label="Speed"
           value={speed}
@@ -58,15 +58,15 @@ export function SimulationControls() {
         />
       </div>
 
-      <div className="flex gap-4 ml-auto text-xs text-gray-400">
+      <div className="flex gap-3 ml-auto text-xs text-gray-400">
         <span>
           Time: <span className="text-gray-200 font-mono">{(simTime / 1000).toFixed(1)}s</span>
         </span>
-        <span>
+        <span className="hidden sm:inline">
           Active:{' '}
           <span className="text-gray-200 font-mono">{activeRequests}</span>
         </span>
-        <span>
+        <span className="hidden sm:inline">
           Total:{' '}
           <span className="text-gray-200 font-mono">{requests.length}</span>
         </span>

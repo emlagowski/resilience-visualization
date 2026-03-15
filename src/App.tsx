@@ -69,14 +69,14 @@ export default function App() {
     <ReactFlowProvider>
       <div className="h-screen flex flex-col bg-gray-950 text-gray-100">
         {/* Top bar */}
-        <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-700">
-          <h1 className="text-lg font-bold text-white tracking-tight">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-900 border-b border-gray-700 flex-wrap">
+          <h1 className="text-base md:text-lg font-bold text-white tracking-tight shrink-0">
             Resilience Visualizer
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {/* Mini-chart selector */}
             <div className="flex items-center gap-1">
-              <span className="text-[11px] text-gray-500">Charts:</span>
+              <span className="text-[11px] text-gray-500 hidden sm:inline">Charts:</span>
               <select
                 value={miniChartMode}
                 onChange={(e) => setMiniChartMode(e.target.value as MiniChartMode)}
@@ -89,12 +89,12 @@ export default function App() {
               </select>
             </div>
 
-            <div className="w-px h-5 bg-gray-700" />
+            <div className="w-px h-5 bg-gray-700 hidden sm:block" />
 
             <select
               value={selectedPreset}
               onChange={(e) => { const i = Number(e.target.value); setSelectedPreset(i); handlePreset(i) }}
-              className="text-sm bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1"
+              className="text-xs md:text-sm bg-gray-800 border border-gray-600 text-gray-200 rounded px-1.5 py-1"
             >
               {presets.map((p, i) => (
                 <option key={p.name} value={i}>
@@ -104,15 +104,17 @@ export default function App() {
             </select>
             <button
               onClick={handleExport}
-              className="px-3 py-1 text-sm bg-gray-800 hover:bg-gray-700 text-gray-200 rounded border border-gray-600"
+              className="px-2 md:px-3 py-1 text-xs md:text-sm bg-gray-800 hover:bg-gray-700 text-gray-200 rounded border border-gray-600"
             >
-              Export JSON
+              <span className="hidden sm:inline">Export JSON</span>
+              <span className="sm:hidden">Export</span>
             </button>
             <button
               onClick={handleImport}
-              className="px-3 py-1 text-sm bg-gray-800 hover:bg-gray-700 text-gray-200 rounded border border-gray-600"
+              className="px-2 md:px-3 py-1 text-xs md:text-sm bg-gray-800 hover:bg-gray-700 text-gray-200 rounded border border-gray-600"
             >
-              Import JSON
+              <span className="hidden sm:inline">Import JSON</span>
+              <span className="sm:hidden">Import</span>
             </button>
             <input
               ref={fileInputRef}
@@ -131,12 +133,12 @@ export default function App() {
         <Toolbar />
 
         {/* Main content */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
           {/* Canvas */}
           <FlowCanvas />
 
-          {/* Right sidebar */}
-          <div className="w-80 border-l border-gray-700 bg-gray-900 flex flex-col shrink-0">
+          {/* Config/Metrics panel — right on desktop, bottom on mobile */}
+          <div className="w-full md:w-80 h-64 md:h-auto border-t md:border-t-0 md:border-l border-gray-700 bg-gray-900 flex flex-col shrink-0">
             <div className="flex border-b border-gray-700">
               <button
                 onClick={() => setRightTab('config')}
