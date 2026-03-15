@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import type { SimRequest, MetricsSnapshot } from '../types'
+import type { SimRequest, MetricsSnapshot, MiniChartMode } from '../types'
 
-export type MiniChartMode = 'none' | 'throughput' | 'latency' | 'error'
+export type { MiniChartMode }
 
 interface SimulationState {
   running: boolean

@@ -1,8 +1,8 @@
 import { memo, useMemo } from 'react'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
-import type { ServiceNodeData } from '../../types'
+import type { ServiceNodeData, MiniChartMode } from '../../types'
 import { useFlowStore } from '../../store/flow-store'
-import { useSimulationStore, type MiniChartMode } from '../../store/simulation-store'
+import { useSimulationStore } from '../../store/simulation-store'
 
 function getHealthColor(data: ServiceNodeData): string {
   if (!data.healthCheck.healthy && data.healthCheck.enabled) return 'border-red-500 bg-red-950'
@@ -103,9 +103,15 @@ function Sparkline({ nodeId, mode }: { nodeId: string; mode: MiniChartMode }) {
 
 export const ServiceNode = memo(function ServiceNode({ data, id, selected }: NodeProps<Node<ServiceNodeData>>) {
   const setSelectedNode = useFlowStore((s) => s.setSelectedNode)
-  const miniChartMode = useSimulationStore((s) => s.miniChartMode)
+  // Per-node chart mode takes precedence over global; fall back to global
+  const globalChartMode = useSimulationStore((s) => s.miniChartMode)
+  const effectiveChartMode: MiniChartMode =
+    data.miniChartMode && data.miniChartMode !== 'none' ? data.miniChartMode : globalChartMode
+
   const healthColor = getHealthColor(data)
   const cbBadge = data.circuitBreaker.enabled ? getCbBadge(data.circuitBreaker.state) : null
+  const isKilled = data.healthCheck.enabled && !data.healthCheck.healthy
+  const latencyMul = data.processingTimeMultiplier ?? 1
 
   return (
     <div
@@ -114,17 +120,23 @@ export const ServiceNode = memo(function ServiceNode({ data, id, selected }: Nod
     >
       <Handle type="target" position={Position.Left} className="!bg-blue-400 !w-3 !h-3" />
 
-      {miniChartMode !== 'none' && (
-        <Sparkline nodeId={id} mode={miniChartMode} />
+      {effectiveChartMode !== 'none' && (
+        <Sparkline nodeId={id} mode={effectiveChartMode} />
       )}
 
       <div className="flex items-center justify-between mb-1">
-        <span className="text-sm font-bold text-white">{data.label}</span>
+        <span className="text-sm font-bold text-white truncate max-w-[110px]">{data.label}</span>
         <div className="flex gap-1 flex-wrap justify-end">
           {data.isSource && (
             <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded">SOURCE</span>
           )}
-          {data.threadModel === 'virtual' && (
+          {isKilled && (
+            <span className="text-[9px] bg-red-700 text-red-200 px-1.5 py-0.5 rounded" title="Node killed — not receiving new traffic">DEAD</span>
+          )}
+          {latencyMul > 1 && (
+            <span className="text-[9px] bg-orange-700 text-orange-200 px-1.5 py-0.5 rounded" title={`Processing time slowed ${latencyMul}×`}>{latencyMul}× SLOW</span>
+          )}
+          {data.threadModel === 'virtual' && !isKilled && (
             <span className="text-[9px] bg-purple-700 text-white px-1.5 py-0.5 rounded" title="Virtual/async threads — released while waiting downstream">ASYNC</span>
           )}
           {/* CB badge: show state when open/half-open, else just "CB" when enabled */}
