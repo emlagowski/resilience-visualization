@@ -101,6 +101,8 @@ export function FlowCanvas() {
         zoomOnPinch={true}
         panOnDrag={true}
         preventScrolling={true}
+        minZoom={0.05}
+        maxZoom={4}
       >
         <Controls className="!bg-gray-800 !border-gray-600 !shadow-lg [&>button]:!bg-gray-800 [&>button]:!border-gray-600 [&>button]:!text-gray-300 [&>button:hover]:!bg-gray-700" />
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#1e293b" />

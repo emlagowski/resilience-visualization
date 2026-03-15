@@ -2,7 +2,12 @@ import { useSimulationStore } from '../../store/simulation-store'
 import { startSimulationLoop, stopSimulationLoop, resetSimulation } from '../../simulation/engine'
 import { ParamSlider } from '../Shared/ParamSlider'
 
-export function SimulationControls() {
+interface Props {
+  onToggleToolbar: () => void
+  toolbarOpen: boolean
+}
+
+export function SimulationControls({ onToggleToolbar, toolbarOpen }: Props) {
   const running = useSimulationStore((s) => s.running)
   const speed = useSimulationStore((s) => s.speed)
   const simTime = useSimulationStore((s) => s.simTime)
@@ -28,10 +33,10 @@ export function SimulationControls() {
   ).length
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-900 border-b border-gray-700">
+    <div className="flex items-center gap-2 px-3 py-2 bg-gray-900 border-b border-gray-700">
       <button
         onClick={handleToggle}
-        className={`px-4 py-1.5 text-sm rounded font-medium transition-colors ${
+        className={`px-4 py-1.5 text-sm rounded font-medium transition-colors shrink-0 ${
           running
             ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
             : 'bg-emerald-600 hover:bg-emerald-500 text-white'
@@ -41,12 +46,12 @@ export function SimulationControls() {
       </button>
       <button
         onClick={handleReset}
-        className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors"
+        className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors shrink-0"
       >
         Reset
       </button>
 
-      <div className="w-32">
+      <div className="w-32 shrink-0">
         <ParamSlider
           label="Speed"
           value={speed}
@@ -71,6 +76,15 @@ export function SimulationControls() {
           <span className="text-gray-200 font-mono">{requests.length}</span>
         </span>
       </div>
+
+      {/* Mobile-only toolbar toggle */}
+      <button
+        onClick={onToggleToolbar}
+        className="md:hidden shrink-0 px-2 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-600 transition-colors"
+        title="Add nodes"
+      >
+        {toolbarOpen ? '✕' : '＋'}
+      </button>
     </div>
   )
 }
