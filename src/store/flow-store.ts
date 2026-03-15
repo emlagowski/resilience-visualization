@@ -60,6 +60,8 @@ export function createDefaultConfig(overrides: Partial<ServiceNodeData> = {}): S
     label: rest.label ?? 'Service',
     threadModel: rest.threadModel ?? 'platform',
     threadPool: { max: 20, active: 0 },
+    queueSize: rest.queueSize ?? 50,
+    queueTimeout: rest.queueTimeout ?? 0,
     connectionPool: { max: 10, active: 0 },
     timeout: 3000,
     processingTime: { min: 50, max: 200 },
@@ -86,6 +88,7 @@ function createEmptyMetrics() {
   return {
     totalRequests: 0,
     activeRequests: 0,
+    queueDepth: 0,
     completedRequests: 0,
     errorCount: 0,
     timeoutCount: 0,

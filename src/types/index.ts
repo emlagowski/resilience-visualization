@@ -45,6 +45,8 @@ export interface ServiceNodeConfig {
   label: string
   threadModel: ThreadModel   // 'platform' = blocking I/O, 'virtual' = async/non-blocking
   threadPool: ThreadPoolConfig
+  queueSize: number   // max requests waiting for a thread; 0 = reject immediately when pool full
+  queueTimeout: number // ms; max time a request waits in queue before rejected; 0 = disabled
   connectionPool: ConnectionPoolConfig
   timeout: number // ms
   processingTime: { min: number; max: number } // ms
@@ -112,7 +114,8 @@ export interface SimRequest {
 
 export interface NodeMetrics {
   totalRequests: number
-  activeRequests: number
+  activeRequests: number  // threads actually in use (processing + platformHeld), never exceeds threadPool.max
+  queueDepth: number      // requests waiting for a free thread (pending, not yet processing)
   completedRequests: number
   errorCount: number
   timeoutCount: number

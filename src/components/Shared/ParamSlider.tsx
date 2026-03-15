@@ -5,14 +5,17 @@ interface ParamSliderProps {
   value: number
   min: number
   max: number
-  step?: number
+  step?: number        // slider granularity
+  stepButton?: number  // +/- button increment (defaults to step)
   unit?: string
   onChange: (value: number) => void
 }
 
-export function ParamSlider({ label, value, min, max, step = 1, unit = '', onChange }: ParamSliderProps) {
+export function ParamSlider({ label, value, min, max, step = 1, stepButton, unit = '', onChange }: ParamSliderProps) {
   const [editing, setEditing] = useState(false)
   const [inputValue, setInputValue] = useState(String(value))
+
+  const inc = stepButton ?? step
 
   const clamp = useCallback(
     (v: number) => Math.min(max, Math.max(min, v)),
@@ -20,19 +23,18 @@ export function ParamSlider({ label, value, min, max, step = 1, unit = '', onCha
   )
 
   const handleDecrement = () => {
-    onChange(clamp(value - step))
+    onChange(clamp(value - inc))
   }
 
   const handleIncrement = () => {
-    onChange(clamp(value + step))
+    onChange(clamp(value + inc))
   }
 
   const handleInputBlur = () => {
     const parsed = Number(inputValue)
     if (!isNaN(parsed)) {
-      // Snap to step
-      const snapped = Math.round(parsed / step) * step
-      onChange(clamp(snapped))
+      // Free-form input: clamp only, no snap to step
+      onChange(clamp(Math.round(parsed)))
     }
     setEditing(false)
   }
@@ -53,7 +55,7 @@ export function ParamSlider({ label, value, min, max, step = 1, unit = '', onCha
           <button
             onClick={handleDecrement}
             className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 rounded text-[11px] font-mono leading-none"
-            title={`-${step}`}
+            title={`-${inc}`}
           >
             -
           </button>
@@ -82,7 +84,7 @@ export function ParamSlider({ label, value, min, max, step = 1, unit = '', onCha
           <button
             onClick={handleIncrement}
             className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 rounded text-[11px] font-mono leading-none"
-            title={`+${step}`}
+            title={`+${inc}`}
           >
             +
           </button>

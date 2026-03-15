@@ -91,6 +91,31 @@ export function ConfigPanel() {
           max={200}
           onChange={(v) => update({ threadPool: { ...data.threadPool, max: v } })}
         />
+        <ParamSlider
+          label="Queue size"
+          value={data.queueSize ?? 50}
+          min={0}
+          max={500}
+          step={1}
+          stepButton={10}
+          onChange={(v) => update({ queueSize: v })}
+          unit=" req"
+        />
+        <ParamSlider
+          label="Queue timeout"
+          value={data.queueTimeout ?? 0}
+          min={0}
+          max={30000}
+          step={100}
+          stepButton={100}
+          unit="ms"
+          onChange={(v) => update({ queueTimeout: v })}
+        />
+        <div className="text-[10px] text-gray-600 italic">
+          {(data.queueSize ?? 50) === 0
+            ? 'Queue disabled — reject immediately when pool full'
+            : `Up to ${data.queueSize ?? 50} requests wait; ${(data.queueTimeout ?? 0) === 0 ? 'rejected immediately if pool busy' : `rejected after ${data.queueTimeout}ms wait`}`}
+        </div>
       </Section>
 
       <Section title="Connection Pool">

@@ -20,9 +20,11 @@ function getCbBadge(state: string): { label: string; color: string } | null {
   return null
 }
 
-function PoolBar({ label, used, max }: { label: string; used: number; max: number }) {
+function PoolBar({ label, used, max, color: baseColor }: { label: string; used: number; max: number; color?: 'orange' }) {
   const pct = max > 0 ? Math.min(used / max, 1) : 0
-  const color = pct > 0.9 ? 'bg-red-500' : pct > 0.7 ? 'bg-yellow-500' : 'bg-emerald-500'
+  const color = baseColor === 'orange'
+    ? (pct > 0.9 ? 'bg-red-500' : pct > 0.5 ? 'bg-orange-500' : 'bg-orange-700')
+    : (pct > 0.9 ? 'bg-red-500' : pct > 0.7 ? 'bg-yellow-500' : 'bg-emerald-500')
   return (
     <div className="flex items-center gap-1 text-[10px]">
       <span className="w-8 text-gray-400 shrink-0">{label}</span>
@@ -151,6 +153,7 @@ export const ServiceNode = memo(function ServiceNode({ data, id, selected }: Nod
       </div>
 
       <div className="space-y-1 mb-1.5">
+        <PoolBar label="Q" used={data.metrics.queueDepth} max={data.queueSize ?? 50} color="orange" />
         <PoolBar label="TH" used={data.metrics.activeRequests} max={data.threadPool.max} />
         <PoolBar label="CN" used={data.connectionPool.active} max={data.connectionPool.max} />
       </div>

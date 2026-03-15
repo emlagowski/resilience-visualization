@@ -225,17 +225,21 @@ function recordCompletion(req: SimRequest, now: number) {
 
 function computeMetrics(nodeId: string, requests: SimRequest[], node: FlowNode, now: number): NodeMetrics {
   // ── Thread/pool occupancy (from live requests) ──────────────────────
-  const activeAtNode = requests.filter(
-    (r) =>
-      r.currentNodeId === nodeId &&
-      (r.status === 'processing' || r.status === 'pending'),
+  const processingAtNode = requests.filter(
+    (r) => r.currentNodeId === nodeId && r.status === 'processing',
+  ).length
+  const queuedAtNode = requests.filter(
+    (r) => r.currentNodeId === nodeId && r.status === 'pending',
   ).length
   // In platform mode, also count threads blocked waiting for downstream responses
   const platformHeld =
     node.data.threadModel === 'platform'
       ? requests.filter((r) => r.platformThreadsHeld.includes(nodeId)).length
       : 0
-  const active = activeAtNode + platformHeld
+  // threadsInUse: actual thread pool consumption — never exceeds threadPool.max
+  const threadsInUse = processingAtNode + platformHeld
+  // total in-flight (threads + queue) — used for totalRequests count
+  const active = processingAtNode + queuedAtNode + platformHeld
 
   // ── Historical counters ─────────────────────────────────────────────
   const totalCompleted = nodeTotalCount[nodeId] ?? 0
@@ -275,7 +279,8 @@ function computeMetrics(nodeId: string, requests: SimRequest[], node: FlowNode, 
 
   return {
     totalRequests: total,
-    activeRequests: active,
+    activeRequests: threadsInUse,  // threads actually occupied (≤ threadPool.max)
+    queueDepth: queuedAtNode,      // requests waiting for a free thread
     completedRequests: okCount,
     errorCount: errCount,
     timeoutCount: toCount,
@@ -290,7 +295,7 @@ function computeMetrics(nodeId: string, requests: SimRequest[], node: FlowNode, 
     errorRate: totalCompleted > 0 ? allFailures / totalCompleted : 0,
     // sliding-window rate — drives node coloring, reacts quickly to changes
     windowErrorRate,
-    threadPoolUsage: node.data.threadPool.max > 0 ? active / node.data.threadPool.max : 0,
+    threadPoolUsage: node.data.threadPool.max > 0 ? threadsInUse / node.data.threadPool.max : 0,
     connectionPoolUsage:
       node.data.connectionPool.max > 0
         ? node.data.connectionPool.active / node.data.connectionPool.max
@@ -412,6 +417,15 @@ function tick(deltaMs: number) {
 
     // ── PENDING — try to enter the node's thread pool ──
     if (req.status === 'pending') {
+      // 1. Check upstream deadline (request waited too long overall)
+      if (req.deadlineAt && now >= req.deadlineAt) {
+        req.status = 'timeout'
+        req.completedAt = now
+        recordCompletion(req, now)
+        finalizeRequest(req, false)
+        continue
+      }
+
       const activeProcessing = requests.filter(
         (r) => r.currentNodeId === currentNode.id && r.status === 'processing',
       ).length
@@ -423,19 +437,52 @@ function tick(deltaMs: number) {
       const activeInNode = activeProcessing + platformHeld
 
       if (activeInNode >= currentNode.data.threadPool.max) {
-        req.status = 'rejected'
-        req.completedAt = now
-        recordCompletion(req, now)
-        finalizeRequest(req, false)
-        continue
-      }
+        if (req.deadlineAt === null) {
+          // Source-originated request with no upstream deadline — reject immediately (back-pressure)
+          req.status = 'rejected'
+          req.completedAt = now
+          recordCompletion(req, now)
+          finalizeRequest(req, false)
+          continue
+        }
 
-      // Check deadline from upstream
-      if (req.deadlineAt && now >= req.deadlineAt) {
-        req.status = 'timeout'
-        req.completedAt = now
-        recordCompletion(req, now)
-        finalizeRequest(req, false)
+        const queueSize = currentNode.data.queueSize ?? 50
+        if (queueSize === 0) {
+          // Queue disabled — reject immediately
+          req.status = 'rejected'
+          req.completedAt = now
+          recordCompletion(req, now)
+          finalizeRequest(req, false)
+          continue
+        }
+
+        // 2. Check local queue timeout (only when actually queuing)
+        // queueTimeout=0 → reject immediately if pool was busy on any prior tick; >0 → reject after N ms
+        const queueTimeout = currentNode.data.queueTimeout ?? 0
+        const waitedMs = now - (req.nodeEntryTime[currentNode.id] ?? now)
+        const timedOut = queueTimeout === 0 ? waitedMs > 0 : waitedMs >= queueTimeout
+        if (timedOut) {
+          req.status = 'rejected'
+          req.completedAt = now
+          recordCompletion(req, now)
+          finalizeRequest(req, false)
+          continue
+        }
+
+        // Check queue capacity (exclude self from count)
+        const currentQueueDepth = requests.filter(
+          (r) => r.currentNodeId === currentNode.id && r.status === 'pending' && r.id !== req.id,
+        ).length
+        if (currentQueueDepth >= queueSize) {
+          // Queue full — reject (queue overflow)
+          req.status = 'rejected'
+          req.completedAt = now
+          recordCompletion(req, now)
+          finalizeRequest(req, false)
+          continue
+        }
+
+        // Space in queue — stay pending until a thread frees up or timeout hits
         continue
       }
 
@@ -473,8 +520,21 @@ function tick(deltaMs: number) {
       }
 
       // Processing done! Check if we need to go downstream
+      // allDownEdges includes failed edges — used to distinguish "leaf node" from "all edges down"
+      const allDownEdges = edges.filter((e) => e.source === currentNode.id)
       const downEdges = getDownstreamEdges(currentNode.id, edges)
-      if (downEdges.length > 0 && req.direction === 'downstream') {
+      if (allDownEdges.length > 0 && req.direction === 'downstream') {
+        // Node has downstream connections but all edges are currently marked as failed
+        if (downEdges.length === 0) {
+          req.status = 'error'
+          req.completedAt = now
+          recordCompletion(req, now)
+          // Treat as downstream failure so CB at this node can track it
+          applyCbResult(currentNode.id, false)
+          finalizeRequest(req, false)
+          continue
+        }
+
         // Check circuit breaker before sending downstream
         const cbAllowed = checkCircuitBreaker(currentNode.data.circuitBreaker, now)
         if (!cbAllowed) {
@@ -522,10 +582,12 @@ function tick(deltaMs: number) {
         )
 
         if (!edge) {
-          // All downstream targets unhealthy
+          // All downstream targets are unhealthy (health check)
           req.status = 'error'
           req.completedAt = now
           recordCompletion(req, now)
+          // Treat as downstream failure so CB at this node can track it
+          applyCbResult(currentNode.id, false)
           finalizeRequest(req, false)
           continue
         }
