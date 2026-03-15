@@ -35,7 +35,7 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
   simTime: 0,
   requests: [],
   metricsHistory: [],
-  miniChartMode: 'none',
+  miniChartMode: 'throughput',
   showStatsTable: false,
 
   start: () => set({ running: true }),

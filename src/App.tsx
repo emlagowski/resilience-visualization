@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { FlowCanvas } from './components/Canvas/FlowCanvas'
 import { Toolbar } from './components/Canvas/Toolbar'
@@ -15,11 +15,18 @@ type RightTab = 'config' | 'metrics'
 
 export default function App() {
   const [rightTab, setRightTab] = useState<RightTab>('config')
+  const [selectedPreset, setSelectedPreset] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const setNodes = useFlowStore((s) => s.setNodes)
   const setEdges = useFlowStore((s) => s.setEdges)
   const miniChartMode = useSimulationStore((s) => s.miniChartMode)
   const setMiniChartMode = useSimulationStore((s) => s.setMiniChartMode)
+
+  // Load the first preset on initial mount
+  useEffect(() => {
+    const first = presets[0]
+    if (first) { setNodes(first.nodes); setEdges(first.edges) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleExport = useCallback(() => {
     const json = exportScenario('My Scenario', 'Exported scenario')
@@ -85,13 +92,10 @@ export default function App() {
             <div className="w-px h-5 bg-gray-700" />
 
             <select
-              onChange={(e) => handlePreset(Number(e.target.value))}
-              defaultValue=""
+              value={selectedPreset}
+              onChange={(e) => { const i = Number(e.target.value); setSelectedPreset(i); handlePreset(i) }}
               className="text-sm bg-gray-800 border border-gray-600 text-gray-200 rounded px-2 py-1"
             >
-              <option value="" disabled>
-                Load preset...
-              </option>
               {presets.map((p, i) => (
                 <option key={p.name} value={i}>
                   {p.name}
@@ -163,6 +167,32 @@ export default function App() {
 
         {/* Stats table at bottom */}
         <StatsTable />
+
+        {/* Footer */}
+        <div className="shrink-0 flex items-center justify-between px-4 py-1 bg-gray-900 border-t border-gray-800 text-[10px] text-gray-600 select-none">
+          <span>
+            Resilience Visualizer © {new Date().getFullYear()}
+            {' · '}
+            Made by{' '}
+            <a
+              href="https://mlagowski.com/?utm_source=resilience-visualization.vercel.app/&utm_content=referral"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-400 hover:text-gray-200 transition-colors"
+            >
+              Marcin Łagowski
+            </a>
+          </span>
+          <a
+            href="https://buymeacoffee.com/emlagowski"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-gray-600 hover:text-amber-400 hover:bg-gray-800 transition-colors"
+          >
+            <span>☕</span>
+            <span>Buy me a coffee</span>
+          </a>
+        </div>
       </div>
     </ReactFlowProvider>
   )

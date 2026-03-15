@@ -120,17 +120,20 @@ export const ServiceNode = memo(function ServiceNode({ data, id, selected }: Nod
 
       <div className="flex items-center justify-between mb-1">
         <span className="text-sm font-bold text-white">{data.label}</span>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap justify-end">
           {data.isSource && (
             <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded">SOURCE</span>
           )}
           {data.threadModel === 'virtual' && (
-            <span className="text-[9px] bg-purple-700 text-white px-1.5 py-0.5 rounded" title="Virtual/async threads — threads released while waiting for downstream">ASYNC</span>
+            <span className="text-[9px] bg-purple-700 text-white px-1.5 py-0.5 rounded" title="Virtual/async threads — released while waiting downstream">ASYNC</span>
           )}
-          {cbBadge && (
+          {/* CB badge: show state when open/half-open, else just "CB" when enabled */}
+          {cbBadge ? (
             <span className={`text-[9px] text-white px-1.5 py-0.5 rounded ${cbBadge.color}`}>
               {cbBadge.label}
             </span>
+          ) : data.circuitBreaker.enabled && (
+            <span className="text-[9px] bg-teal-900 text-teal-400 px-1.5 py-0.5 rounded" title="Circuit breaker enabled (closed)">CB</span>
           )}
         </div>
       </div>

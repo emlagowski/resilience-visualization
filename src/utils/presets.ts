@@ -87,7 +87,7 @@ export const presets: ScenarioConfig[] = [
         processingTime: { min: 10, max: 20 },
         loadBalancer: 'round-robin',
       }),
-      makeNode('n-be1', 'Backend #1', 1000, 100, {
+      makeNode('n-be1', 'Backend #1', 1000, 50, {
         threadPool: { max: 50, active: 0 },
         processingTime: { min: 1000, max: 1200 },
         errorRate: 0.0,
@@ -99,7 +99,7 @@ export const presets: ScenarioConfig[] = [
         errorRate: 0.0,
         healthCheck: { enabled: true, interval: 50, healthy: true },
       }),
-      makeNode('n-be3', 'Backend #3', 1000, 400, {
+      makeNode('n-be3', 'Backend #3', 1000, 450, {
         threadPool: { max: 50, active: 0 },
         processingTime: { min: 1000, max: 1200 },
         errorRate: 0.0,
