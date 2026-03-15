@@ -4,15 +4,18 @@ import {
   Controls,
   Background,
   BackgroundVariant,
+  SelectionMode,
   type NodeTypes,
   type EdgeTypes,
   type Node,
+  type Edge,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useFlowStore } from '../../store/flow-store'
 import { ServiceNode } from './ServiceNode'
 import { ConnectionEdge } from './ConnectionEdge'
 import { ContextMenu } from './ContextMenu'
+import { EdgeContextMenu } from './EdgeContextMenu'
 
 const nodeTypes: NodeTypes = {
   service: ServiceNode,
@@ -28,6 +31,12 @@ interface CtxMenu {
   y: number
 }
 
+interface EdgeCtxMenu {
+  edgeId: string
+  x: number
+  y: number
+}
+
 export function FlowCanvas() {
   const nodes = useFlowStore((s) => s.nodes)
   const edges = useFlowStore((s) => s.edges)
@@ -39,6 +48,7 @@ export function FlowCanvas() {
   const updateNodePosition = useFlowStore((s) => s.updateNodePosition)
 
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null)
+  const [edgeCtxMenu, setEdgeCtxMenu] = useState<EdgeCtxMenu | null>(null)
 
   // Option/Alt + drag → duplicate: track origin position when alt drag starts
   const altDrag = useRef<{ nodeId: string; startPos: { x: number; y: number } } | null>(null)
@@ -46,15 +56,26 @@ export function FlowCanvas() {
   const onPaneClick = useCallback(() => {
     setSelectedNode(null)
     setCtxMenu(null)
+    setEdgeCtxMenu(null)
   }, [setSelectedNode])
 
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {
       event.preventDefault()
+      setEdgeCtxMenu(null)
       setCtxMenu({ nodeId: node.id, x: event.clientX, y: event.clientY })
       setSelectedNode(node.id)
     },
     [setSelectedNode],
+  )
+
+  const onEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: Edge) => {
+      event.preventDefault()
+      setCtxMenu(null)
+      setEdgeCtxMenu({ edgeId: edge.id, x: event.clientX, y: event.clientY })
+    },
+    [],
   )
 
   const onNodeDragStart = useCallback(
@@ -90,6 +111,7 @@ export function FlowCanvas() {
         onConnect={onConnect}
         onPaneClick={onPaneClick}
         onNodeContextMenu={onNodeContextMenu}
+        onEdgeContextMenu={onEdgeContextMenu}
         onNodeDragStart={onNodeDragStart as any}
         onNodeDragStop={onNodeDragStop as any}
         nodeTypes={nodeTypes}
@@ -99,7 +121,12 @@ export function FlowCanvas() {
         defaultEdgeOptions={{ type: 'default' }}
         className="bg-gray-950"
         zoomOnPinch={true}
-        panOnDrag={true}
+        // Pan with middle or right mouse button so left-drag can do rubber-band selection
+        panOnDrag={[1, 2]}
+        selectionOnDrag={true}
+        selectionMode={SelectionMode.Partial}
+        multiSelectionKeyCode="Shift"
+        deleteKeyCode={['Backspace', 'Delete']}
         preventScrolling={true}
         minZoom={0.05}
         maxZoom={4}
@@ -117,9 +144,18 @@ export function FlowCanvas() {
         />
       )}
 
+      {edgeCtxMenu && (
+        <EdgeContextMenu
+          edgeId={edgeCtxMenu.edgeId}
+          x={edgeCtxMenu.x}
+          y={edgeCtxMenu.y}
+          onClose={() => setEdgeCtxMenu(null)}
+        />
+      )}
+
       {/* Hint */}
       <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-gray-700 pointer-events-none select-none hidden md:block">
-        Right-click node for menu · Alt+drag to duplicate
+        Right-click node/edge for menu · Shift+click or drag to multi-select · Alt+drag to duplicate
       </div>
     </div>
   )
