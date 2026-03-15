@@ -119,14 +119,19 @@ export const ServiceNode = memo(function ServiceNode({ data, id, selected }: Nod
 
       <div className="flex items-center justify-between mb-1">
         <span className="text-sm font-bold text-white">{data.label}</span>
-        {data.isSource && (
-          <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded">SOURCE</span>
-        )}
-        {cbBadge && (
-          <span className={`text-[9px] text-white px-1.5 py-0.5 rounded ${cbBadge.color}`}>
-            {cbBadge.label}
-          </span>
-        )}
+        <div className="flex gap-1">
+          {data.isSource && (
+            <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded">SOURCE</span>
+          )}
+          {data.threadModel === 'virtual' && (
+            <span className="text-[9px] bg-purple-700 text-white px-1.5 py-0.5 rounded" title="Virtual/async threads — threads released while waiting for downstream">ASYNC</span>
+          )}
+          {cbBadge && (
+            <span className={`text-[9px] text-white px-1.5 py-0.5 rounded ${cbBadge.color}`}>
+              {cbBadge.label}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="space-y-1 mb-1.5">

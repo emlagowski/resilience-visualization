@@ -1,6 +1,6 @@
 import { useFlowStore } from '../../store/flow-store'
 import { ParamSlider } from '../Shared/ParamSlider'
-import type { ServiceNodeData, LoadBalancerStrategy, CbThresholdMode } from '../../types'
+import type { ServiceNodeData, LoadBalancerStrategy, CbThresholdMode, ThreadModel } from '../../types'
 
 export function ConfigPanel() {
   const nodes = useFlowStore((s) => s.nodes)
@@ -61,6 +61,29 @@ export function ConfigPanel() {
       )}
 
       <Section title="Thread Pool">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-gray-400">Thread model</span>
+          <div className="flex gap-1">
+            {(['platform', 'virtual'] as ThreadModel[]).map((model) => (
+              <button
+                key={model}
+                onClick={() => update({ threadModel: model })}
+                className={`flex-1 text-[10px] py-0.5 rounded border transition-colors ${
+                  data.threadModel === model
+                    ? 'bg-blue-600 border-blue-500 text-white'
+                    : 'bg-gray-800 border-gray-600 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {model === 'platform' ? '🧵 Platform' : '⚡ Virtual/Async'}
+              </button>
+            ))}
+          </div>
+          <div className="text-[10px] text-gray-600 italic">
+            {data.threadModel === 'platform'
+              ? 'Thread held while awaiting downstream (blocking I/O)'
+              : 'Thread released when forwarding downstream (non-blocking)'}
+          </div>
+        </div>
         <ParamSlider
           label="Max threads"
           value={data.threadPool.max}

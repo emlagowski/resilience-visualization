@@ -39,8 +39,11 @@ export interface HealthCheckConfig {
 
 export type LoadBalancerStrategy = 'round-robin' | 'random' | 'least-connections'
 
+export type ThreadModel = 'platform' | 'virtual'
+
 export interface ServiceNodeConfig {
   label: string
+  threadModel: ThreadModel   // 'platform' = blocking I/O, 'virtual' = async/non-blocking
   threadPool: ThreadPoolConfig
   connectionPool: ConnectionPoolConfig
   timeout: number // ms
@@ -91,6 +94,7 @@ export interface SimRequest {
   edgeId: string | null // current edge being animated (visual only, does not block processing)
   direction: 'downstream' | 'upstream' // request or response
   nodeEntryTime: Record<string, number> // sim time when the request entered each node
+  platformThreadsHeld: string[] // nodeIds whose platform threads are blocked waiting for this request
 }
 
 // ─── Metrics ───────────────────────────────────────────────────────

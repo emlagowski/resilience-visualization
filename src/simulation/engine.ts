@@ -13,9 +13,16 @@ let requestIdCounter = 0
 let animFrameId: number | null = null
 let lastTime = 0
 
-// Per-node tracking: latencies and RPS windows now track EVERY node a request passes through
-const nodeLatencies: Record<string, number[]> = {}
-const nodeRpsWindow: Record<string, number[]> = {}
+// Per-node historical counters — all grow monotonically and are only cleared on reset.
+// Using historical counts (not live-request filtering) prevents the errorRate from
+// drifting toward 0 as the totalRequests denominator grows unboundedly.
+const nodeLatencies: Record<string, number[]> = {}   // latencies of SUCCESSFUL completions only
+const nodeRpsWindow: Record<string, number[]> = {}   // wall-clock timestamps for RPS (all requests)
+const nodeTotalCount: Record<string, number> = {}    // all terminal requests through this node
+const nodeOkCount: Record<string, number> = {}       // completed successfully
+const nodeErrorCount: Record<string, number> = {}    // error + circuit_open
+const nodeTimeoutCount: Record<string, number> = {}  // timeout
+const nodeRejectedCount: Record<string, number> = {} // rejected (thread/connection pool full)
 const requestAccumulator: Record<string, number> = {}
 // Round-robin counter per node
 const rrCounter: Record<string, number> = {}
@@ -160,71 +167,105 @@ function updateCircuitBreakerOnResult(
 /**
  * Record completion metrics for EVERY node in the request's path.
  * For each node, latency = completedAt - nodeEntryTime[nodeId].
+ *
+ * Rules:
+ * - Latency is tracked ONLY for successful (completed) requests. Recording
+ *   rejections/errors (which complete near-instantly) would artificially lower
+ *   avgLatency when the system is shedding load.
+ * - Error/timeout/rejected counters are historical accumulators so errorRate
+ *   stays accurate over long simulations (doesn't drift to 0 as total grows).
+ * - RPS window tracks all request types (throughput = all attempts).
  */
 function recordCompletion(req: SimRequest, now: number) {
   const realNow = Date.now()
+  const status = req.status
+
   for (const nodeId of req.path) {
     const entryTime = req.nodeEntryTime[nodeId]
     if (entryTime == null) continue
-    const latency = now - entryTime
 
-    if (!nodeLatencies[nodeId]) nodeLatencies[nodeId] = []
-    nodeLatencies[nodeId]!.push(latency)
-    // Trim to avoid unbounded growth
-    if (nodeLatencies[nodeId]!.length > 1000) {
-      nodeLatencies[nodeId] = nodeLatencies[nodeId]!.slice(-500)
+    // ── Historical counters (always updated) ───────────────────────
+    nodeTotalCount[nodeId] = (nodeTotalCount[nodeId] ?? 0) + 1
+
+    if (status === 'completed') {
+      nodeOkCount[nodeId] = (nodeOkCount[nodeId] ?? 0) + 1
+      // Latency only for successes — keeps avg/p99 meaningful under load shedding
+      const latency = now - entryTime
+      if (!nodeLatencies[nodeId]) nodeLatencies[nodeId] = []
+      nodeLatencies[nodeId]!.push(latency)
+      if (nodeLatencies[nodeId]!.length > 1000) {
+        nodeLatencies[nodeId] = nodeLatencies[nodeId]!.slice(-500)
+      }
+    } else if (status === 'timeout') {
+      nodeTimeoutCount[nodeId] = (nodeTimeoutCount[nodeId] ?? 0) + 1
+    } else if (status === 'rejected') {
+      nodeRejectedCount[nodeId] = (nodeRejectedCount[nodeId] ?? 0) + 1
+    } else {
+      // error, circuit_open
+      nodeErrorCount[nodeId] = (nodeErrorCount[nodeId] ?? 0) + 1
     }
 
+    // ── RPS window (wall-clock, all request types) ──────────────────
     if (!nodeRpsWindow[nodeId]) nodeRpsWindow[nodeId] = []
     nodeRpsWindow[nodeId]!.push(realNow)
   }
 }
 
 function computeMetrics(nodeId: string, requests: SimRequest[], node: FlowNode): NodeMetrics {
-  const active = requests.filter(
+  // ── Thread/pool occupancy (from live requests) ──────────────────────
+  const activeAtNode = requests.filter(
     (r) =>
       r.currentNodeId === nodeId &&
       (r.status === 'processing' || r.status === 'pending'),
   ).length
+  // In platform mode, also count threads blocked waiting for downstream responses
+  const platformHeld =
+    node.data.threadModel === 'platform'
+      ? requests.filter((r) => r.platformThreadsHeld.includes(nodeId)).length
+      : 0
+  const active = activeAtNode + platformHeld
+
+  // ── Historical counters ─────────────────────────────────────────────
+  const totalCompleted = nodeTotalCount[nodeId] ?? 0
+  const okCount = nodeOkCount[nodeId] ?? 0
+  const errCount = nodeErrorCount[nodeId] ?? 0
+  const toCount = nodeTimeoutCount[nodeId] ?? 0
+  const rejCount = nodeRejectedCount[nodeId] ?? 0
+  // All failure types count toward error rate (including rejections/circuit_open)
+  const allFailures = errCount + toCount + rejCount
+  const total = totalCompleted + active
+
+  // ── Latency stats (successes only) ─────────────────────────────────
   const latencies = nodeLatencies[nodeId] ?? []
   const sorted = [...latencies].sort((a, b) => a - b)
   const avg = sorted.length > 0 ? sorted.reduce((a, b) => a + b, 0) / sorted.length : 0
   const p99 = sorted.length > 0 ? (sorted[Math.floor(sorted.length * 0.99)] ?? 0) : 0
+  const minLat = sorted.length > 0 ? sorted[0]! : 0
+  const maxLat = sorted.length > 0 ? sorted[sorted.length - 1]! : 0
 
+  // ── RPS (all request types, 1s wall-clock window) ───────────────────
   const rpsTimestamps = nodeRpsWindow[nodeId] ?? []
   const realNow = Date.now()
   const recentRps = rpsTimestamps.filter((t) => realNow - t < 1000).length
-
-  // Clean up old RPS timestamps
   if (rpsTimestamps.length > 500) {
     nodeRpsWindow[nodeId] = rpsTimestamps.filter((t) => realNow - t < 2000)
   }
 
-  const completedCount = nodeLatencies[nodeId]?.length ?? 0
-  const total = completedCount + active
-  const errorCount = requests.filter(
-    (r) => r.path.includes(nodeId) && (r.status === 'error' || r.status === 'timeout'),
-  ).length
-
-  const minLat = sorted.length > 0 ? sorted[0]! : 0
-  const maxLat = sorted.length > 0 ? sorted[sorted.length - 1]! : 0
-
   return {
     totalRequests: total,
     activeRequests: active,
-    completedRequests: completedCount,
-    errorCount,
-    timeoutCount: requests.filter((r) => r.path.includes(nodeId) && r.status === 'timeout').length,
-    rejectedCount: requests.filter(
-      (r) => r.path.includes(nodeId) && (r.status === 'rejected' || r.status === 'circuit_open'),
-    ).length,
+    completedRequests: okCount,
+    errorCount: errCount,
+    timeoutCount: toCount,
+    rejectedCount: rejCount,
     circuitOpenCount: node.data.circuitBreaker.state === 'open' ? 1 : 0,
     avgLatency: Math.round(avg),
     p99Latency: Math.round(p99),
     minLatency: Math.round(minLat),
     maxLatency: Math.round(maxLat),
     requestsPerSecond: recentRps,
-    errorRate: total > 0 ? errorCount / total : 0,
+    // errorRate includes ALL failure modes so the node turns red when shedding load
+    errorRate: totalCompleted > 0 ? allFailures / totalCompleted : 0,
     threadPoolUsage: node.data.threadPool.max > 0 ? active / node.data.threadPool.max : 0,
     connectionPoolUsage:
       node.data.connectionPool.max > 0
@@ -284,6 +325,8 @@ function tick(deltaMs: number) {
       freeConnectionPool(upId)
       applyCbResult(upId, success)
     }
+    // Release all platform threads that were held waiting for this request
+    req.platformThreadsHeld = []
   }
 
   // 1. Generate new requests from source nodes
@@ -310,6 +353,7 @@ function tick(deltaMs: number) {
         edgeId: null,
         direction: 'downstream',
         nodeEntryTime: { [node.id]: now },
+        platformThreadsHeld: [],
       })
     }
   }
@@ -344,9 +388,15 @@ function tick(deltaMs: number) {
 
     // ── PENDING — try to enter the node's thread pool ──
     if (req.status === 'pending') {
-      const activeInNode = requests.filter(
+      const activeProcessing = requests.filter(
         (r) => r.currentNodeId === currentNode.id && r.status === 'processing',
       ).length
+      // In platform mode, also count threads blocked waiting for downstream responses
+      const platformHeld =
+        currentNode.data.threadModel === 'platform'
+          ? requests.filter((r) => r.platformThreadsHeld.includes(currentNode.id)).length
+          : 0
+      const activeInNode = activeProcessing + platformHeld
 
       if (activeInNode >= currentNode.data.threadPool.max) {
         req.status = 'rejected'
@@ -464,6 +514,12 @@ function tick(deltaMs: number) {
           },
         }
 
+        // In platform thread mode, the current node's thread stays blocked while
+        // waiting for the downstream response — record it in platformThreadsHeld
+        if (currentNode.data.threadModel === 'platform') {
+          req.platformThreadsHeld = [...req.platformThreadsHeld, currentNode.id]
+        }
+
         // Set edgeId for visual animation only — does NOT block processing
         req.edgeId = edge.id
         req.progress = 0
@@ -554,6 +610,11 @@ export function resetSimulation() {
   stopSimulationLoop()
   for (const key of Object.keys(nodeLatencies)) delete nodeLatencies[key]
   for (const key of Object.keys(nodeRpsWindow)) delete nodeRpsWindow[key]
+  for (const key of Object.keys(nodeTotalCount)) delete nodeTotalCount[key]
+  for (const key of Object.keys(nodeOkCount)) delete nodeOkCount[key]
+  for (const key of Object.keys(nodeErrorCount)) delete nodeErrorCount[key]
+  for (const key of Object.keys(nodeTimeoutCount)) delete nodeTimeoutCount[key]
+  for (const key of Object.keys(nodeRejectedCount)) delete nodeRejectedCount[key]
   for (const key of Object.keys(requestAccumulator)) delete requestAccumulator[key]
   for (const key of Object.keys(rrCounter)) delete rrCounter[key]
   requestIdCounter = 0

@@ -39,11 +39,12 @@ function makeNode(
 export const presets: ScenarioConfig[] = [
   // ─── 1. Classic BFF → LB → 3 backends ─────────────────────────
   {
-    name: 'Mobile App → BFF → F5 → 3x Backend',
+    name: 'Mobile App → 2x BFF → F5 → 3x Backend',
     description: 'Classic flow with load balancer distributing to 3 backend instances',
     nodes: [
       makeNode('n-am', 'Mobile App', 50, 250, {
         isSource: true,
+        threadPool: { max: 200, active: 0 },
         requestsPerSecond: 100,
         connectionPool: { max: 200, active: 0 },
         timeout: 3000,
@@ -86,17 +87,17 @@ export const presets: ScenarioConfig[] = [
       }),
       makeNode('n-be1', 'Backend #1', 1000, 100, {
         threadPool: { max: 35, active: 0 },
-        processingTime: { min: 500, max: 1000 },
+        processingTime: { min: 1000, max: 1200 },
         errorRate: 0.0,
       }),
       makeNode('n-be2', 'Backend #2', 1000, 250, {
         threadPool: { max: 35, active: 0 },
-        processingTime: { min: 500, max: 1000 },
+        processingTime: { min: 1000, max: 1200 },
         errorRate: 0.0,
       }),
       makeNode('n-be3', 'Backend #3', 1000, 400, {
         threadPool: { max: 35, active: 0 },
-        processingTime: { min: 500, max: 1000 },
+        processingTime: { min: 1000, max: 1200 },
         errorRate: 0.0,
       }),
     ],

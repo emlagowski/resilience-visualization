@@ -56,6 +56,7 @@ export function createDefaultConfig(overrides: Partial<ServiceNodeData> = {}): S
 
   return {
     label: rest.label ?? 'Service',
+    threadModel: rest.threadModel ?? 'platform',
     threadPool: { max: 20, active: 0 },
     connectionPool: { max: 10, active: 0 },
     timeout: 3000,
