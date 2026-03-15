@@ -8,8 +8,9 @@ function getHealthColor(data: ServiceNodeData): string {
   if (!data.healthCheck.healthy && data.healthCheck.enabled) return 'border-red-500 bg-red-950'
   if (data.circuitBreaker.state === 'open') return 'border-orange-500 bg-orange-950'
   if (data.circuitBreaker.state === 'half-open') return 'border-yellow-500 bg-yellow-950'
-  if (data.metrics.errorRate > 0.5) return 'border-red-500 bg-red-950'
-  if (data.metrics.errorRate > 0.1) return 'border-yellow-500 bg-yellow-950'
+  // Node colour driven by the sliding-window rate — reacts quickly to kills/recoveries
+  if (data.metrics.windowErrorRate > 0.5) return 'border-red-500 bg-red-950'
+  if (data.metrics.windowErrorRate > 0.1) return 'border-yellow-500 bg-yellow-950'
   return 'border-emerald-500 bg-gray-900'
 }
 
@@ -108,7 +109,7 @@ export const ServiceNode = memo(function ServiceNode({ data, id, selected }: Nod
 
   return (
     <div
-      className={`rounded-lg border-2 px-3 py-2 min-w-[180px] shadow-lg transition-colors ${healthColor} ${selected ? 'ring-2 ring-blue-400' : ''}`}
+      className={`rounded-lg border-2 px-3 py-2 w-[210px] shadow-lg transition-colors ${healthColor} ${selected ? 'ring-2 ring-blue-400' : ''}`}
       onClick={() => setSelectedNode(id)}
     >
       <Handle type="target" position={Position.Left} className="!bg-blue-400 !w-3 !h-3" />
@@ -139,13 +140,16 @@ export const ServiceNode = memo(function ServiceNode({ data, id, selected }: Nod
         <PoolBar label="CN" used={data.connectionPool.active} max={data.connectionPool.max} />
       </div>
 
-      <div className="flex gap-2 text-[10px] text-gray-300">
-        <span>{data.metrics.requestsPerSecond} rps</span>
-        <span>{data.metrics.avgLatency}ms</span>
-        <span
-          className={data.metrics.errorRate > 0.1 ? 'text-red-400' : ''}
-        >
-          {(data.metrics.errorRate * 100).toFixed(1)}% err
+      {/* Fixed-layout row — tabular-nums + justify-between prevent width thrashing */}
+      <div className="flex justify-between text-[10px] tabular-nums">
+        <span className="text-gray-400">{data.metrics.requestsPerSecond} rps</span>
+        <span className="text-gray-400">{data.metrics.avgLatency}ms</span>
+        <span className={
+          data.metrics.windowErrorRate > 0.5 ? 'text-red-400 font-semibold' :
+          data.metrics.windowErrorRate > 0.1 ? 'text-yellow-400' :
+          'text-gray-600'
+        }>
+          {(data.metrics.windowErrorRate * 100).toFixed(1)}% err
         </span>
       </div>
 

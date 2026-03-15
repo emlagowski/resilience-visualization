@@ -16,6 +16,7 @@ function emptyMetrics() {
     maxLatency: 0,
     requestsPerSecond: 0,
     errorRate: 0,
+    windowErrorRate: 0,
     threadPoolUsage: 0,
     connectionPoolUsage: 0,
   }
@@ -57,10 +58,11 @@ export const presets: ScenarioConfig[] = [
         circuitBreaker: {
           ...createDefaultConfig().circuitBreaker,
           enabled: true,
-          failureThreshold: 5,
+          failureRateThreshold: 50,
+          minSampleSize: 50,
           successThreshold: 3,
           openDuration: 10000,
-          windowSize: 60000,
+          windowSize: 15000,
         },
       }),
       makeNode('n-bff-2', 'BFF-2', 350, 350, {
@@ -71,10 +73,11 @@ export const presets: ScenarioConfig[] = [
         circuitBreaker: {
           ...createDefaultConfig().circuitBreaker,
           enabled: true,
-          failureThreshold: 5,
+          failureRateThreshold: 50,
+          minSampleSize: 50,
           successThreshold: 3,
           openDuration: 10000,
-          windowSize: 60000,
+          windowSize: 15000,
         },
       }),
       makeNode('n-f5', 'F5 LB', 650, 250, {
@@ -83,22 +86,24 @@ export const presets: ScenarioConfig[] = [
         timeout: 5000,
         processingTime: { min: 10, max: 20 },
         loadBalancer: 'round-robin',
-        healthCheck: { enabled: true, interval: 5000, healthy: true },
       }),
       makeNode('n-be1', 'Backend #1', 1000, 100, {
-        threadPool: { max: 35, active: 0 },
+        threadPool: { max: 50, active: 0 },
         processingTime: { min: 1000, max: 1200 },
         errorRate: 0.0,
+        healthCheck: { enabled: true, interval: 50, healthy: true },
       }),
       makeNode('n-be2', 'Backend #2', 1000, 250, {
-        threadPool: { max: 35, active: 0 },
+        threadPool: { max: 50, active: 0 },
         processingTime: { min: 1000, max: 1200 },
         errorRate: 0.0,
+        healthCheck: { enabled: true, interval: 50, healthy: true },
       }),
       makeNode('n-be3', 'Backend #3', 1000, 400, {
-        threadPool: { max: 35, active: 0 },
+        threadPool: { max: 50, active: 0 },
         processingTime: { min: 1000, max: 1200 },
         errorRate: 0.0,
+        healthCheck: { enabled: true, interval: 50, healthy: true },
       }),
     ],
     edges: [

@@ -112,7 +112,8 @@ export interface NodeMetrics {
   minLatency: number
   maxLatency: number
   requestsPerSecond: number
-  errorRate: number
+  errorRate: number          // cumulative: all failures / all completed
+  windowErrorRate: number    // sliding window: CB window if CB enabled, else 30s
   threadPoolUsage: number // 0-1
   connectionPoolUsage: number // 0-1
 }

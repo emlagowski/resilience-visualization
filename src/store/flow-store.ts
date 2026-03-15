@@ -93,6 +93,7 @@ function createEmptyMetrics() {
     maxLatency: 0,
     requestsPerSecond: 0,
     errorRate: 0,
+    windowErrorRate: 0,
     threadPoolUsage: 0,
     connectionPoolUsage: 0,
   }

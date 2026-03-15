@@ -23,6 +23,10 @@ const nodeOkCount: Record<string, number> = {}       // completed successfully
 const nodeErrorCount: Record<string, number> = {}    // error + circuit_open
 const nodeTimeoutCount: Record<string, number> = {}  // timeout
 const nodeRejectedCount: Record<string, number> = {} // rejected (thread/connection pool full)
+// Sliding-window error tracking (sim-time timestamps, for the windowed error rate metric).
+// Window size = CB window when CB enabled, 30 s otherwise.
+const nodeWindowAll: Record<string, number[]> = {}     // sim-time stamps of all completions
+const nodeWindowFail: Record<string, number[]> = {}    // sim-time stamps of failures
 const requestAccumulator: Record<string, number> = {}
 // Round-robin counter per node
 const rrCounter: Record<string, number> = {}
@@ -205,13 +209,21 @@ function recordCompletion(req: SimRequest, now: number) {
       nodeErrorCount[nodeId] = (nodeErrorCount[nodeId] ?? 0) + 1
     }
 
+    // ── Sliding-window failure tracking (sim time) ─────────────────
+    if (!nodeWindowAll[nodeId]) nodeWindowAll[nodeId] = []
+    nodeWindowAll[nodeId]!.push(now)
+    if (status !== 'completed') {
+      if (!nodeWindowFail[nodeId]) nodeWindowFail[nodeId] = []
+      nodeWindowFail[nodeId]!.push(now)
+    }
+
     // ── RPS window (wall-clock, all request types) ──────────────────
     if (!nodeRpsWindow[nodeId]) nodeRpsWindow[nodeId] = []
     nodeRpsWindow[nodeId]!.push(realNow)
   }
 }
 
-function computeMetrics(nodeId: string, requests: SimRequest[], node: FlowNode): NodeMetrics {
+function computeMetrics(nodeId: string, requests: SimRequest[], node: FlowNode, now: number): NodeMetrics {
   // ── Thread/pool occupancy (from live requests) ──────────────────────
   const activeAtNode = requests.filter(
     (r) =>
@@ -243,6 +255,16 @@ function computeMetrics(nodeId: string, requests: SimRequest[], node: FlowNode):
   const minLat = sorted.length > 0 ? sorted[0]! : 0
   const maxLat = sorted.length > 0 ? sorted[sorted.length - 1]! : 0
 
+  // ── Sliding-window error rate (sim time) ───────────────────────────
+  // Use the CB window size when CB is enabled, otherwise default to 30 s.
+  const windowMs = node.data.circuitBreaker.enabled ? node.data.circuitBreaker.windowSize : 30_000
+  const winAll = (nodeWindowAll[nodeId] ?? []).filter((t) => now - t <= windowMs)
+  const winFail = (nodeWindowFail[nodeId] ?? []).filter((t) => now - t <= windowMs)
+  // Trim stale entries to avoid unbounded growth
+  nodeWindowAll[nodeId] = winAll
+  nodeWindowFail[nodeId] = winFail
+  const windowErrorRate = winAll.length > 0 ? winFail.length / winAll.length : 0
+
   // ── RPS (all request types, 1s wall-clock window) ───────────────────
   const rpsTimestamps = nodeRpsWindow[nodeId] ?? []
   const realNow = Date.now()
@@ -264,8 +286,10 @@ function computeMetrics(nodeId: string, requests: SimRequest[], node: FlowNode):
     minLatency: Math.round(minLat),
     maxLatency: Math.round(maxLat),
     requestsPerSecond: recentRps,
-    // errorRate includes ALL failure modes so the node turns red when shedding load
+    // cumulative rate — never resets, useful for full-session view
     errorRate: totalCompleted > 0 ? allFailures / totalCompleted : 0,
+    // sliding-window rate — drives node coloring, reacts quickly to changes
+    windowErrorRate,
     threadPoolUsage: node.data.threadPool.max > 0 ? active / node.data.threadPool.max : 0,
     connectionPoolUsage:
       node.data.connectionPool.max > 0
@@ -565,7 +589,7 @@ function tick(deltaMs: number) {
   // Update metrics on all nodes
   const freshNodes = useFlowStore.getState().nodes
   for (const node of freshNodes) {
-    const metrics = computeMetrics(node.id, requests, node)
+    const metrics = computeMetrics(node.id, requests, node, now)
     flowStore.updateNodeConfig(node.id, { metrics })
   }
 
@@ -615,6 +639,8 @@ export function resetSimulation() {
   for (const key of Object.keys(nodeErrorCount)) delete nodeErrorCount[key]
   for (const key of Object.keys(nodeTimeoutCount)) delete nodeTimeoutCount[key]
   for (const key of Object.keys(nodeRejectedCount)) delete nodeRejectedCount[key]
+  for (const key of Object.keys(nodeWindowAll)) delete nodeWindowAll[key]
+  for (const key of Object.keys(nodeWindowFail)) delete nodeWindowFail[key]
   for (const key of Object.keys(requestAccumulator)) delete requestAccumulator[key]
   for (const key of Object.keys(rrCounter)) delete rrCounter[key]
   requestIdCounter = 0

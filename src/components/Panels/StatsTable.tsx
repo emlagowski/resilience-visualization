@@ -94,7 +94,8 @@ export function StatsTable() {
               <th className="text-right px-2 py-1 font-medium">P99 ms</th>
               <th className="text-right px-2 py-1 font-medium">Min ms</th>
               <th className="text-right px-2 py-1 font-medium">Max ms</th>
-              <th className="text-right px-2 py-1 font-medium">Err%</th>
+              <th className="text-right px-2 py-1 font-medium" title="Error rate in sliding window (CB window or 30 s)">Err%(W)</th>
+              <th className="text-right px-2 py-1 font-medium" title="Cumulative error rate since last reset">Err%(∑)</th>
               <th className="text-right px-2 py-1 font-medium">TH Pool</th>
               <th className="text-right px-2 py-1 font-medium">CN Pool</th>
             </tr>
@@ -102,7 +103,11 @@ export function StatsTable() {
           <tbody>
             {orderedNodes.map((node) => {
               const m = node.data.metrics
-              const errPct = (m.errorRate * 100).toFixed(1)
+              const winErrPct = (m.windowErrorRate * 100).toFixed(1)
+              const totErrPct = (m.errorRate * 100).toFixed(1)
+              const windowLabel = node.data.circuitBreaker.enabled
+                ? `CB ${node.data.circuitBreaker.windowSize / 1000}s`
+                : '30s'
               const thPct = (m.threadPoolUsage * 100).toFixed(0)
               const cnPct = (m.connectionPoolUsage * 100).toFixed(0)
               const isOver = dragOver === node.id
@@ -149,8 +154,14 @@ export function StatsTable() {
                   <td className="text-right px-2 py-1 text-gray-300">{m.p99Latency}</td>
                   <td className="text-right px-2 py-1 text-gray-500">{m.minLatency}</td>
                   <td className="text-right px-2 py-1 text-gray-500">{m.maxLatency}</td>
-                  <td className={`text-right px-2 py-1 ${Number(errPct) > 10 ? 'text-red-400' : Number(errPct) > 0 ? 'text-yellow-400' : 'text-gray-500'}`}>
-                    {errPct}%
+                  <td
+                    className={`text-right px-2 py-1 ${Number(winErrPct) > 50 ? 'text-red-400' : Number(winErrPct) > 10 ? 'text-yellow-400' : Number(winErrPct) > 0 ? 'text-orange-300' : 'text-gray-500'}`}
+                    title={`Window: ${windowLabel}`}
+                  >
+                    {winErrPct}%
+                  </td>
+                  <td className={`text-right px-2 py-1 ${Number(totErrPct) > 10 ? 'text-red-300/70' : Number(totErrPct) > 0 ? 'text-yellow-300/70' : 'text-gray-600'}`}>
+                    {totErrPct}%
                   </td>
                   <td className={`text-right px-2 py-1 ${Number(thPct) > 90 ? 'text-red-400' : Number(thPct) > 70 ? 'text-yellow-400' : 'text-gray-500'}`}>
                     {thPct}%
